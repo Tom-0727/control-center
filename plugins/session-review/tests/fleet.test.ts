@@ -38,6 +38,7 @@ test("fleet: identical IDs stay separate, offline node yields partial results an
     assert.ok(progress.includes("running")); assert.ok(progress.includes("succeeded"));
     assert.equal(Date.parse(calls[0].input.bounds.from), Date.parse("2026-09-30T00:00:00.000+08:00"));
     assert.equal(result.timezone, "Asia/Singapore");
+    assert.ok(result.sessions.every(s => s.origin === "human" && s.launcher === null), "cards keep their origin through the remote schema");
     const session = result.sessions.find(s => s.nodeId === "remote" && s.provider === "claude")!;
     await fleet.detail(session.nodeId, session.provider, session.sourceId!, 0);
     assert.equal(calls.at(-1)?.node, "remote"); assert.equal(calls.at(-1)?.input.id, "c1");

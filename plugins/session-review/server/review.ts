@@ -1,6 +1,6 @@
 import type { Decision, Progress, ReviewResult, Scope, SessionCard, SessionDetail, Span } from "../shared/model.ts";
 import { EXCERPT_MAX, MESSAGE_MAX, SESSION_LIMIT, TITLE_MAX } from "../shared/model.ts";
-import { attribute, inScope, loadCatalog, type Catalog } from "./catalog.ts";
+import { attribute, classify, inScope, loadCatalog, type Catalog } from "./catalog.ts";
 import { clip } from "./decisions.ts";
 import type { Homes } from "./paths.ts";
 import { isUnder } from "./paths.ts";
@@ -168,7 +168,7 @@ export function toCards(sessions: ExtractedSession[], catalog: Catalog, hiddenBy
       sessionStartedAt: s.startedAt, sessionEndedAt: s.endedAt, continued: Date.parse(s.startedAt) < from.getTime(),
       activeMs: sumMs(spans, "run"), waitMs: sumMs(spans, "wait"),
       userMessages: messagesInRange.filter((m) => m.role === "user").length, userMessagesTotal: s.userMessages,
-      agentId: a.agentId, projectId: a.projectId,
+      agentId: a.agentId, projectId: a.projectId, origin: classify(a.launcher, s.userMessages), launcher: a.launcher,
       branch: s.branch, cwd: s.cwd, forkedFrom: s.forkedFrom, depth: 0,
       hiddenThreads: (hiddenByParent.get(s.id) ?? []).length,
       spans, decisions: s.decisions.filter((d) => inRange(d.at)).map(shortenDecision), error: s.error, warning: s.warning, file: s.file,

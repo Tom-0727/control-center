@@ -4,7 +4,7 @@ import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resolveConfig, type ResolvedConfig } from "../server/config.ts";
-import { PaseoGateway } from "../server/gateway.ts";
+import { PaseoGateway, ensureCollector } from "../server/gateway.ts";
 
 const local = { id: "srv_local", name: "macbook" };
 
@@ -38,5 +38,25 @@ test("gateway: a registry adds the other nodes through node.sh with the configur
     // The repository directory is wrong: the error names the script instead of failing silently.
     const misplaced = new PaseoGateway(() => ({ ...config, controlCenterDir: join(root, "elsewhere") }), local);
     await assert.rejects(misplaced.nodes(), /node\.sh/);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("gateway: the collector bundle is rebuilt only when its sources are newer, and a failed build names the manual command", async () => {
+  const root = await mkdtemp(join(tmpdir(), "review-gateway-"));
+  try {
+    const plugin = join(root, "plugin");
+    for (const dir of ["server/sources", "shared", "scripts"]) await mkdir(join(plugin, dir), { recursive: true });
+    await writeFile(join(plugin, "server/sources/a.ts"), "a"); await writeFile(join(plugin, "shared/b.ts"), "b"); await writeFile(join(plugin, "scripts/collector.ts"), "c");
+    let builds = 0;
+    const build = async (dir: string) => { builds++; await mkdir(join(dir, "dist"), { recursive: true }); await writeFile(join(dir, "dist/collector.cjs"), "bundle"); return ""; };
+    assert.equal(await ensureCollector(plugin, undefined, build), join(plugin, "dist/collector.cjs"));
+    assert.equal(builds, 1);
+    await ensureCollector(plugin, undefined, build); assert.equal(builds, 1, "a fresh bundle is reused");
+    await new Promise(r => setTimeout(r, 20));
+    await writeFile(join(plugin, "server/sources/a.ts"), "changed");
+    await ensureCollector(plugin, undefined, build); assert.equal(builds, 2, "a newer source triggers a rebuild");
+    await new Promise(r => setTimeout(r, 20));
+    await writeFile(join(plugin, "shared/b.ts"), "changed again");
+    await assert.rejects(ensureCollector(plugin, undefined, async () => { throw new Error("esbuild missing"); }), /npm run build:collector.*esbuild missing/);
   } finally { await rm(root, { recursive: true, force: true }); }
 });

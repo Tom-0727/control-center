@@ -2,7 +2,7 @@ import type { PluginTheme } from "@getpaseo/plugin";
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { Decision, SessionCard } from "../shared/model";
-import { KIND_LABELS, PROVIDER_LABELS, fmtDate, fmtDuration, fmtTime } from "./format";
+import { KIND_LABELS, PROVIDER_LABELS, fmtDate, fmtDuration, fmtTime, originTag } from "./format";
 import { Button, Muted, Pill, type Tone } from "./ui";
 import { dateKey, dayStartMs, nextDayStartMs } from "../shared/time";
 
@@ -52,6 +52,7 @@ export function Gantt({ sessions, theme, compact, timezone: tz, showNode, select
     <View style={{ backgroundColor: c.surface1, borderColor: c.border, borderWidth: 1, borderRadius: 8, padding: 10, gap: 8, marginBottom: 6, marginLeft: compact ? 0 : LABEL_WIDTH }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
         <Pill label={PROVIDER_LABELS[s.provider] ?? s.provider} theme={theme} tone="accent" />
+        {originTag(s) ? <Pill label={originTag(s)!} theme={theme} /> : null}
         {showNode && s.nodeName && <Pill label={s.nodeName} theme={theme} />}
         {s.depth > 0 && <Pill label="分叉" theme={theme} />}
         {s.error && <Pill label="无法解析" theme={theme} tone="danger" />}

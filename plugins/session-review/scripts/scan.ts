@@ -4,6 +4,7 @@ import { resolveConfig } from "../server/config.ts";
 import { Fleet, localNode } from "../server/fleet.ts";
 import { PaseoGateway } from "../server/gateway.ts";
 import { resolveHomes } from "../server/paths.ts";
+import { countOrigins } from "../server/snapshots.ts";
 import { Store } from "../server/store.ts";
 import type { Range } from "../shared/model.ts";
 const kind = process.argv[2] ?? "today";
@@ -26,5 +27,5 @@ for (const node of result.nodes ?? []) {
     details.push({ node: node.name, ok: true, pageMessages: detail.messages.length, totalMessages: detail.totalMessages });
   } catch (error) { details.push({ node: node.name, ok: false, error: String(error) }); }
 }
-console.log(JSON.stringify({ event: "result", from: result.from, to: result.to, timezone: result.timezone, complete: result.complete, warning: result.warning, nodes: result.nodes, overview: result.overview, projects: result.projects?.length, details }));
+console.log(JSON.stringify({ event: "result", from: result.from, to: result.to, timezone: result.timezone, complete: result.complete, warning: result.warning, nodes: result.nodes, overview: result.overview, origins: countOrigins(result.sessions), projects: result.projects?.length, details }));
 if (result.nodes?.every(n => n.status !== "succeeded") || details.some(d => !d.ok)) process.exitCode = 1;

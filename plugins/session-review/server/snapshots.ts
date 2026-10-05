@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { catalogSchema, type ReviewCatalog } from "../shared/contracts.ts";
-import { rangeSchema, reviewResultSchema, SESSION_LIMIT, type Progress, type Range, type ReviewResult, type Scope } from "../shared/model.ts";
+import { rangeSchema, reviewResultSchema, SESSION_LIMIT, type Origins, type Progress, type Range, type ReviewResult, type Scope, type SessionCard } from "../shared/model.ts";
 import { calendarBounds } from "../shared/time.ts";
 import type { Fleet } from "./fleet.ts";
 import { redactText } from "./redact.ts";
@@ -8,9 +8,11 @@ import { peakParallel, unionRunMs } from "./spans.ts";
 import { EXTRACT_VERSION, type Store } from "./store.ts";
 
 export const REFRESH_MS = 5 * 60_000;
+/** Bump when the stored card shape changes; snapshots of another version are rebuilt silently. */
+export const DISK_VERSION = 2;
 const PRESETS: Range[] = [{ kind: "today" }, { kind: "yesterday" }, { kind: "last7" }];
 const diskSchema = z.object({
-  version: z.literal(1), extractVersion: z.literal(EXTRACT_VERSION),
+  version: z.literal(DISK_VERSION), extractVersion: z.literal(EXTRACT_VERSION),
   catalog: catalogSchema.optional(), results: z.array(reviewResultSchema),
   customRanges: z.array(rangeSchema), workspaces: z.record(z.string(), z.string()),
 });
@@ -37,6 +39,17 @@ function retainOffline(fresh: ReviewResult, previous?: ReviewResult): ReviewResu
     generatedAt: nodes.some(n => n.status === "succeeded") ? fresh.generatedAt : previous?.generatedAt ?? fresh.generatedAt };
 }
 
+/** Counts per origin, with scheduled sessions broken down by schedule name. */
+export function countOrigins(sessions: SessionCard[]): Origins {
+  const counts = { human: 0, scheduled: 0, other: 0 };
+  const schedules = new Map<string, number>();
+  for (const s of sessions) {
+    counts[s.origin] += 1;
+    if (s.origin === "scheduled" && s.launcher?.kind === "schedule") schedules.set(s.launcher.name, (schedules.get(s.launcher.name) ?? 0) + 1);
+  }
+  return { ...counts, schedules: [...schedules].map(([name, n]) => ({ name, sessions: n })).sort((a, b) => b.sessions - a.sessions || a.name.localeCompare(b.name)) };
+}
+
 export function filterSnapshot(result: ReviewResult, scope: Scope): ReviewResult {
   const knownNodes = new Set(result.nodes?.map(n => n.id));
   if (scope.nodeIds?.some(id => !knownNodes.has(id))) throw new Error("节点清单已变更，请重新选择节点");
@@ -48,13 +61,16 @@ export function filterSnapshot(result: ReviewResult, scope: Scope): ReviewResult
     projectNode = project[0];
   }
   const selected = (nodeId?: string) => !scope.nodeIds || scope.nodeIds.includes(nodeId!);
-  const sessions = result.sessions.filter(s => selected(s.nodeId) && (!scope.projectId || s.projectId === scope.projectId));
+  const scoped = result.sessions.filter(s => selected(s.nodeId) && (!scope.projectId || s.projectId === scope.projectId));
+  // The page shows what each origin would contain, so hiding is never silent.
+  const origins = countOrigins(scoped);
+  const sessions = scope.origin ? scoped.filter(s => s.origin === scope.origin) : scoped;
   const projects = (result.projects ?? []).filter(p => selected(p.nodeId));
   const nodes = (result.nodes ?? []).filter(n => selected(n.id) && (!scope.projectId || n.id === projectNode)).map(n => ({
     ...n, sessions: sessions.filter(s => s.nodeId === n.id).length,
   }));
   if (nodes.some(n => n.sessions > SESSION_LIMIT)) throw new Error(`范围内单个节点超过 ${SESSION_LIMIT} 个会话，请收窄日期范围或项目`);
-  return { ...result, scope, sessions, nodes, projects, overview: overview(sessions), complete: nodes.every(n => n.status === "succeeded") };
+  return { ...result, scope, sessions, nodes, projects, origins, overview: overview(sessions), complete: nodes.every(n => n.status === "succeeded") };
 }
 
 /** One daemon-owned scheduler; page reads never wait for node connections. */
@@ -84,7 +100,8 @@ export class Snapshots {
   async init(): Promise<void> {
     try {
       const raw = await this.store.readSnapshots();
-      if (raw) {
+      // Another version's snapshot is rebuilt without complaint; only a damaged file of this version is reported.
+      if (raw && (raw as { version?: unknown }).version === DISK_VERSION) {
         const saved = diskSchema.parse(raw);
         const tz = this.timezone();
         this.savedCatalog = saved.catalog; this.customRanges = saved.customRanges.slice(-8); this.workspaces = saved.workspaces;
@@ -153,7 +170,7 @@ export class Snapshots {
 
   private save(): Promise<void> {
     this.writes = this.writes.then(async () => {
-      await this.store.writeSnapshots({ version: 1, extractVersion: EXTRACT_VERSION, catalog: this.savedCatalog,
+      await this.store.writeSnapshots({ version: DISK_VERSION, extractVersion: EXTRACT_VERSION, catalog: this.savedCatalog,
         results: [...this.entries.values()].flatMap(e => e.result ? [e.result] : []).slice(-32),
         customRanges: this.customRanges, workspaces: this.workspaces });
       this.storageError = undefined;

@@ -5,7 +5,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { Text, View } from "react-native";
 import { sessionDetailRpc } from "../shared/contracts";
 import type { SessionCard } from "../shared/model";
-import { KIND_LABELS, fmtTime } from "./format";
+import { KIND_LABELS, fmtTime, originTag } from "./format";
 import { Button, Muted, Pill } from "./ui";
 
 export function DetailModal({ session, hostId, theme, timezone, showNode, onClose }: { session: SessionCard | null; hostId: string; theme: PluginTheme; timezone: string; showNode: boolean; onClose(): void }) {
@@ -26,7 +26,10 @@ export function DetailModal({ session, hostId, theme, timezone, showNode, onClos
         {detail.error && <Text style={{ color: c.statusDanger }}>{String(detail.error)}</Text>}
         {first && (
           <View style={{ gap: 10 }}>
-            <Muted theme={theme}>{showNode && session?.nodeName ? `${session.nodeName} · ` : ""}{first.cwd}</Muted>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              {session && originTag(session) ? <Pill label={originTag(session)!} theme={theme} /> : null}
+              <Muted theme={theme}>{showNode && session?.nodeName ? `${session.nodeName} · ` : ""}{first.cwd}</Muted>
+            </View>
             {first.decisions.length > 0 && (
               <View style={{ gap: 4 }}>
                 <Text style={{ color: c.foreground, fontWeight: "600" }}>决策点</Text>

@@ -5,11 +5,11 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { catalogRpc, reviewReadRpc, reviewRefreshRpc } from "../shared/contracts";
-import type { Range, Scope, SessionCard } from "../shared/model";
+import type { Origin, Range, Scope, SessionCard } from "../shared/model";
 import { localTimezone } from "../shared/time";
 import { Decisions } from "./decisions";
 import { DetailModal } from "./detail";
-import { fmtDate, fmtDuration, fmtTime } from "./format";
+import { ORIGIN_LABELS, fmtDate, fmtDuration, fmtTime } from "./format";
 import { Gantt } from "./gantt";
 import { Button, Choice, Muted, SectionTitle } from "./ui";
 
@@ -26,7 +26,7 @@ const RANGE_OPTIONS = [
 ] as const;
 
 // Paseo remounts panels when the layout flips between compact and wide; keep the chosen scope across remounts.
-interface Remembered { pickedProject: string | null; rangeKind: Range["kind"]; customFrom: string; customTo: string; nodeId: string | null; workspaces: Record<string, string> }
+interface Remembered { pickedProject: string | null; rangeKind: Range["kind"]; customFrom: string; customTo: string; nodeId: string | null; workspaces: Record<string, string>; origin: Origin | null }
 const remembered = new Map<string, Remembered>();
 const NODE_LABELS = { pending: "等待", running: "读取中", succeeded: "完成", offline: "离线", failed: "失败", needs_workspace: "选择工作区" };
 
@@ -42,7 +42,9 @@ export function Review({ theme, compact, hostId, workspaceId }: ReviewProps) {
   const [customFrom, setCustomFrom] = useState(initial?.customFrom ?? ""), [customTo, setCustomTo] = useState(initial?.customTo ?? "");
   const [nodeId, setNodeId] = useState<string | null>(initial?.nodeId ?? null);
   const [workspaces, setWorkspaces] = useState<Record<string, string>>(initial?.workspaces ?? {});
-  useEffect(() => { remembered.set(memoryKey, { pickedProject, rangeKind, customFrom, customTo, nodeId, workspaces }); }, [memoryKey, pickedProject, rangeKind, customFrom, customTo, nodeId, workspaces]);
+  // Review is about work a person took part in; null shows every origin.
+  const [origin, setOrigin] = useState<Origin | null>(initial ? initial.origin : "human");
+  useEffect(() => { remembered.set(memoryKey, { pickedProject, rangeKind, customFrom, customTo, nodeId, workspaces, origin }); }, [memoryKey, pickedProject, rangeKind, customFrom, customTo, nodeId, workspaces, origin]);
 
   const [selectedDecision, setSelectedDecision] = useState<string | null>(null);
   const [openSession, setOpenSession] = useState<SessionCard | null>(null);
@@ -59,10 +61,11 @@ export function Review({ theme, compact, hostId, workspaceId }: ReviewProps) {
     projectId,
     nodeIds: !workspaceId && effectiveNodeId ? [effectiveNodeId] : undefined,
     workspaces,
+    origin: origin ?? undefined,
     range: rangeKind === "custom"
       ? { kind: "custom", from: /^\d{4}-\d{2}-\d{2}$/.test(customFrom) ? customFrom : undefined, to: /^\d{4}-\d{2}-\d{2}$/.test(customTo) ? customTo : undefined }
       : { kind: rangeKind },
-  }), [projectId, rangeKind, customFrom, customTo, effectiveNodeId, workspaceId, workspaces]);
+  }), [projectId, rangeKind, customFrom, customTo, effectiveNodeId, workspaceId, workspaces, origin]);
 
   const snapshot = useQuery({
     queryKey: ["session-review", "snapshot", hostId, scope, catalog.data?.today, catalog.data?.timezone],
@@ -98,6 +101,17 @@ export function Review({ theme, compact, hostId, workspaceId }: ReviewProps) {
           </View>
         ) : (
           <Muted theme={theme}>项目 · {projectName ?? "全部"}</Muted>
+        )}
+        {result?.origins && (origin !== "human" || result.origins.scheduled + result.origins.other > 0) && (
+          <View style={{ gap: 6 }}>
+            <Muted theme={theme}>会话来源</Muted>
+            <Choice theme={theme} value={origin ?? "__all"} onChange={(v) => setOrigin(v === "__all" ? null : v)}
+              options={[
+                ...(["human", "scheduled", "other"] as const).map((o) => ({ label: `${ORIGIN_LABELS[o]} ${result.origins![o]}`, value: o })),
+                { label: `全部 ${result.origins.human + result.origins.scheduled + result.origins.other}`, value: "__all" as const },
+              ]} />
+            {result.origins.schedules.length > 0 && <Muted theme={theme}>定时任务：{result.origins.schedules.map((s) => `${s.name} ${s.sessions}`).join(" · ")}</Muted>}
+          </View>
         )}
         <View style={{ flexDirection: compact ? "column" : "row", gap: 10, alignItems: compact ? "stretch" : "center", flexWrap: "wrap" }}>
           <Choice theme={theme} value={rangeKind} onChange={(v) => setRangeKind(v)} options={RANGE_OPTIONS} />

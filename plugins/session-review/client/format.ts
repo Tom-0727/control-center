@@ -1,3 +1,4 @@
+import type { SessionCard } from "../shared/model";
 import { dateKey, zonedParts } from "../shared/time";
 
 export function fmtTime(iso: string | number, tz: string): string {
@@ -26,3 +27,11 @@ export const KIND_LABELS: Record<string, string> = {
   question: "提问", interrupt: "打断", denied: "拒绝", memory: "记忆", "memory-index": "记忆索引",
 };
 export const PROVIDER_LABELS: Record<string, string> = { claude: "Claude", codex: "Codex" };
+export const ORIGIN_LABELS: Record<string, string> = { human: "由人发起", scheduled: "定时任务", other: "其他" };
+
+/** Tag for a session nobody started by hand; null for a person's own session. */
+export function originTag(s: Pick<SessionCard, "origin" | "launcher">): string | null {
+  if (s.launcher?.kind === "schedule") return `定时 · ${s.launcher.name}`;
+  if (s.launcher?.kind === "agent") return "agent 委派";
+  return s.origin === "other" ? "无人发言" : null;
+}

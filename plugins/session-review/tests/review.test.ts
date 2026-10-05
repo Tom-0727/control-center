@@ -9,8 +9,8 @@ import { makeHomes } from "./fixtures.ts";
 
 const now = () => new Date(2026, 8, 30, 20, 0, 0);
 
-async function deps() {
-  const h = await makeHomes();
+async function deps(options?: Parameters<typeof makeHomes>[0]) {
+  const h = await makeHomes(options);
   const store = new Store(join(h.paseoHome, "session-review"));
   await store.init();
   return { h, deps: { homes: { paseoHome: h.paseoHome, claudeHome: h.claudeHome, codexHome: h.codexHome, dataDir: store.dataDir }, store, now } };
@@ -148,4 +148,24 @@ test("a session is shown on every day it was active, clipped to that day", async
   assert.deepEqual(card.decisions.map((d) => d.id), ["d2"]);
   assert.equal(card.spans.filter((s) => s.kind === "run").length, 1, "only the second day's run survives");
   assert.equal(card.activeMs, 30 * 60_000);
+});
+
+test("origin: a schedule's run, a run a person joined, a delegated agent and an empty session", async () => {
+  const { classify } = await import("../server/catalog.ts");
+  const { deps: d } = await deps({ automation: true });
+  const result = await runReview({ range: { kind: "today" } }, d, () => {});
+  const by = (id: string) => result.sessions.find((s) => s.id === id)!;
+  assert.equal(result.sessions.length, 7, "three original sessions plus four automated ones");
+  assert.equal(by("c1").origin, "human"); assert.equal(by("c1").launcher, null);
+  assert.equal(by("run1").origin, "scheduled");
+  assert.deepEqual(by("run1").launcher, { kind: "schedule", id: "sch_1", name: "夜间巡检" });
+  assert.equal(by("run2").origin, "human", "a person typed after the launch prompt");
+  assert.deepEqual(by("run2").launcher, { kind: "schedule", id: "sch_gone", name: "sch_gone" }, "a deleted schedule is named by its id");
+  assert.equal(by("child1").origin, "other"); assert.deepEqual(by("child1").launcher, { kind: "agent", id: "agent-1" });
+  assert.equal(by("empty1").origin, "other"); assert.equal(by("empty1").launcher, null);
+  assert.equal(by("x1").origin, "human", "Codex sessions have no Paseo record and are classified by who spoke");
+  assert.equal(classify(null, 0), "other"); assert.equal(classify(null, 1), "human");
+  assert.equal(classify({ kind: "schedule", id: "s", name: "s" }, 1), "scheduled");
+  assert.equal(classify({ kind: "agent", id: "a" }, 1), "other");
+  assert.equal(classify({ kind: "agent", id: "a" }, 2), "human");
 });
