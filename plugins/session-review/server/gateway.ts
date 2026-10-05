@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { gunzipSync } from "node:zlib";
 import type { RegistryInfo } from "../shared/contracts.ts";
@@ -40,6 +40,35 @@ export function command(file: string, args: string[], signal?: AbortSignal, time
   });
 }
 
+async function newestMtime(path: string): Promise<number> {
+  const info = await stat(path);
+  if (!info.isDirectory()) return info.mtimeMs;
+  const children = await readdir(path);
+  const times = await Promise.all(children.map(child => newestMtime(join(path, child))));
+  return Math.max(info.mtimeMs, ...times);
+}
+
+/**
+ * The collector bundle is a build product that is not committed, so a freshly pulled checkout rebuilds it
+ * before the next remote collection; a plain plugin reload is then enough to pick up new code.
+ */
+export async function ensureCollector(pluginDir: string, signal?: AbortSignal, build = defaultBuild): Promise<string> {
+  const bundle = join(pluginDir, "dist/collector.cjs");
+  const sources = await Promise.all(["server", "shared", "scripts/collector.ts"].map(name => newestMtime(join(pluginDir, name))));
+  const built = await stat(bundle).then(info => info.mtimeMs, () => -1);
+  if (built >= Math.max(...sources)) return bundle;
+  try { await build(pluginDir, signal); }
+  catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`采集程序构建失败，请在仓库目录执行 npm ci 和 npm run build:collector --workspace=session-review：${detail}`);
+  }
+  return bundle;
+}
+
+function defaultBuild(pluginDir: string, signal?: AbortSignal): Promise<string> {
+  return command(process.execPath, [join(pluginDir, "scripts/build-collector.mjs")], signal, 120000);
+}
+
 export function parseFrame(output: string): any {
   const lines = output.split(/\r?\n/).map(s => s.trim());
   const first = lines.indexOf("SR_BEGIN"), last = lines.indexOf("SR_END", first + 1);
@@ -60,7 +89,7 @@ export class PaseoGateway {
 
   private scripts(config: ResolvedConfig) {
     const dir = join(config.controlCenterDir, ".agents/skills/paseo-nodes-use/scripts");
-    return { nodeSh: join(dir, "node.sh"), execSh: join(dir, "exec.sh"), bundle: join(config.controlCenterDir, "plugins/session-review/dist/collector.cjs") };
+    return { nodeSh: join(dir, "node.sh"), execSh: join(dir, "exec.sh"), pluginDir: join(config.controlCenterDir, "plugins/session-review") };
   }
   private run(file: string, args: string[], signal?: AbortSignal, timeout?: number): Promise<string> {
     return command(file, args, signal, timeout, { PASEO_DEPLOY_DIR: this.config().nodesDir });
@@ -94,7 +123,8 @@ export class PaseoGateway {
     return this.run(this.scripts(this.config()).execSh, [node.name, "--workspace", workspace, "--timeout", "300", "--", code], signal, 330000);
   }
   private async install(node: NodeTarget, workspace: string, signal?: AbortSignal): Promise<string> {
-    const { nodeSh, bundle } = this.scripts(this.config());
+    const { nodeSh, pluginDir } = this.scripts(this.config());
+    const bundle = await ensureCollector(pluginDir, signal);
     const bytes = await readFile(bundle);
     const digest = createHash("sha256").update(bytes).digest("hex");
     const pathCode = `require('node:path').join(process.env.PASEO_HOME||require('node:path').join(require('node:os').homedir(),'.paseo'),'session-review','collectors','${digest}.cjs')`;

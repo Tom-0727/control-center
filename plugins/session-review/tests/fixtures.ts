@@ -52,7 +52,7 @@ export function codexLines(id: string, cwd: string, opts: { parent?: string; for
   ];
 }
 
-export async function makeHomes(): Promise<{ root: string; paseoHome: string; claudeHome: string; codexHome: string; cwd: string }> {
+export async function makeHomes(options: { automation?: boolean } = {}): Promise<{ root: string; paseoHome: string; claudeHome: string; codexHome: string; cwd: string }> {
   const root = await mkdtemp(join(tmpdir(), "session-review-"));
   const cwd = join(root, "work", "proj");
   const paseoHome = join(root, "paseo"), claudeHome = join(root, "claude"), codexHome = join(root, "codex");
@@ -67,5 +67,37 @@ export async function makeHomes(): Promise<{ root: string; paseoHome: string; cl
   await writeFile(join(paseoHome, "projects", "projects.json"), JSON.stringify([{ projectId: "prj_1", rootPath: join(root, "work"), displayName: "work", customName: "工作" }]));
   await writeFile(join(paseoHome, "projects", "workspaces.json"), JSON.stringify([{ workspaceId: "wks_1", projectId: "prj_1", cwd, displayName: "proj", title: "项目" }]));
   await writeFile(join(paseoHome, "agents", "g", "a1.json"), JSON.stringify({ id: "agent-1", provider: "claude", cwd, workspaceId: "wks_1", persistence: { provider: "claude", sessionId: "c1" } }));
+  if (options.automation) await addAutomation(root, paseoHome, claudeHome);
   return { root, paseoHome, claudeHome, codexHome, cwd };
+}
+
+/** Sessions nobody started by hand, in their own project so the existing counts stay untouched. */
+async function addAutomation(root: string, paseoHome: string, claudeHome: string): Promise<void> {
+  const bot = join(root, "bots", "cook");
+  const projects = join(claudeHome, "projects", "-bots-cook");
+  await mkdir(projects, { recursive: true });
+  await mkdir(join(paseoHome, "schedules"), { recursive: true });
+  await writeFile(join(paseoHome, "schedules", "sch_1.json"), JSON.stringify({ id: "sch_1", name: "夜间巡检", prompt: "你是巡检的一次 run" }));
+  const agent = (id: string, sessionId: string, labels: Record<string, string>) =>
+    JSON.stringify({ id, provider: "claude", cwd: bot, workspaceId: null, labels, persistence: { provider: "claude", sessionId } });
+  await writeFile(join(paseoHome, "agents", "g", "run1.json"), agent("agent-run1", "run1", { "paseo.schedule-id": "sch_1", "paseo.schedule-run": "r1" }));
+  // The schedule behind this run was deleted since, and a person typed into the run.
+  await writeFile(join(paseoHome, "agents", "g", "run2.json"), agent("agent-run2", "run2", { "paseo.schedule-id": "sch_gone", "paseo.schedule-run": "r2" }));
+  await writeFile(join(paseoHome, "agents", "g", "child1.json"), agent("agent-child1", "child1", { "paseo.parent-agent-id": "agent-1" }));
+  // Distinct start times: two files with the same first prompt at the same instant would be folded as resumed copies.
+  await writeFile(join(projects, "run1.jsonl"), botLines("run1", bot, ["你是巡检的一次 run"], 6).join("\n") + "\n");
+  await writeFile(join(projects, "run2.jsonl"), botLines("run2", bot, ["你是巡检的一次 run", "我插一句：先别发"], 7).join("\n") + "\n");
+  await writeFile(join(projects, "child1.jsonl"), botLines("child1", bot, ["子任务：整理清单"], 8).join("\n") + "\n");
+  await writeFile(join(projects, "empty1.jsonl"), botLines("empty1", bot, [], 9).join("\n") + "\n");
+}
+
+/** A transcript starting at `hour` UTC with the given user prompts, each answered once; with none, only injected text and a reply. */
+export function botLines(sessionId: string, cwd: string, prompts: string[], hour: number): string[] {
+  const rec = (o: Record<string, unknown>) => JSON.stringify({ sessionId, cwd, version: "2.1.0", ...o });
+  const user = (ts: string, content: unknown) => rec({ type: "user", timestamp: ts, message: { role: "user", content } });
+  const asst = (ts: string, id: string, text: string) => rec({ type: "assistant", timestamp: ts, message: { id, role: "assistant", content: [{ type: "text", text }] } });
+  const lines = [JSON.stringify({ type: "permission-mode", permissionMode: "auto", sessionId })];
+  if (prompts.length === 0) return [...lines, user(T(hour, 0), "<system-reminder>注入内容</system-reminder>"), asst(T(hour, 0, 5), "m0", "没有收到任务。")];
+  prompts.forEach((prompt, i) => { lines.push(user(T(hour, i * 10), prompt), asst(T(hour, i * 10, 5), `m${i}`, "已处理。")); });
+  return lines;
 }

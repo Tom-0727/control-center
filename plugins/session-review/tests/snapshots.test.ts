@@ -6,7 +6,7 @@ import { join } from "node:path";
 import type { ReviewResult, Scope, SessionCard } from "../shared/model.ts";
 import { calendarBounds } from "../shared/time.ts";
 import { projectKey, type Fleet } from "../server/fleet.ts";
-import { REFRESH_MS, Snapshots, filterSnapshot } from "../server/snapshots.ts";
+import { DISK_VERSION, REFRESH_MS, Snapshots, filterSnapshot } from "../server/snapshots.ts";
 import { Store } from "../server/store.ts";
 
 const TODAY: Scope = { range: { kind: "today" } };
@@ -15,7 +15,7 @@ const TZ = "Asia/Singapore";
 function card(nodeId: string, projectId = projectKey(nodeId, nodeId)): SessionCard {
   return { id: `${nodeId}-s`, sourceId: "s", nodeId, nodeName: nodeId, provider: "claude", title: "Synthetic session",
     startedAt: INITIAL.toISOString(), endedAt: INITIAL.toISOString(), sessionStartedAt: INITIAL.toISOString(), sessionEndedAt: INITIAL.toISOString(),
-    continued: false, activeMs: 0, waitMs: 0, userMessages: 1, userMessagesTotal: 1, agentId: null, projectId,
+    continued: false, activeMs: 0, waitMs: 0, userMessages: 1, userMessagesTotal: 1, agentId: null, projectId, origin: "human", launcher: null,
     branch: null, cwd: "/synthetic", forkedFrom: null, depth: 0, hiddenThreads: 0, spans: [], decisions: [], error: null, file: "/synthetic/s.jsonl" };
 }
 function result(scope: Scope, at = INITIAL, tz = TZ): ReviewResult {
@@ -170,4 +170,35 @@ test("snapshots: a timezone change resets the calendar, and saved ranges from an
     await restored.refresh();
     assert.equal(restored.read(TODAY).result?.from, "2026-10-03");
   } finally { restored?.dispose(); h.snapshots.dispose(); await rm(h.root, { recursive: true, force: true }); }
+});
+
+test("snapshots: the origin filter counts before hiding, hidden sessions never use the limit, no origin means all", () => {
+  const r = result(TODAY);
+  const run = (i: number): SessionCard => ({ ...card("a"), id: `run-${i}`, origin: "scheduled", launcher: { kind: "schedule", id: "sch", name: "巡检" } });
+  r.sessions = [card("a"), card("b"), ...Array.from({ length: 201 }, (_, i) => run(i)),
+    { ...card("b"), id: "joined", launcher: { kind: "schedule", id: "sch", name: "巡检" } },
+    { ...card("a"), id: "child", origin: "other", launcher: { kind: "agent", id: "p" } }];
+  const human = filterSnapshot(r, { ...TODAY, origin: "human" });
+  assert.deepEqual(human.sessions.map(s => s.id), ["a-s", "b-s", "joined"]);
+  assert.deepEqual(human.origins, { human: 3, scheduled: 201, other: 1, schedules: [{ name: "巡检", sessions: 201 }] });
+  assert.equal(human.overview.sessions, 3); assert.equal(human.nodes?.find(n => n.id === "a")?.sessions, 1);
+  assert.throws(() => filterSnapshot(r, { ...TODAY, origin: "scheduled" }), /200/);
+  assert.throws(() => filterSnapshot(r, TODAY), /200/);
+  const other = filterSnapshot(r, { ...TODAY, nodeIds: ["b"], origin: "other" });
+  assert.equal(other.sessions.length, 0); assert.deepEqual(other.origins, { human: 2, scheduled: 0, other: 0, schedules: [] });
+});
+
+test("snapshots: a snapshot written by another version is ignored without an error and rebuilt", async () => {
+  const h = await setup();
+  let release!: () => void;
+  const gate = new Promise<void>(r => { release = r; });
+  try {
+    await writeFile(join(h.root, "snapshots.json"), JSON.stringify({ version: 1, extractVersion: 5, results: [], customRanges: [], workspaces: {} }));
+    h.setScan(async scope => { await gate; return result(scope); });
+    await h.snapshots.init();
+    assert.equal(h.snapshots.read(TODAY).error, undefined); assert.equal(h.snapshots.read(TODAY).result, undefined);
+    release(); await h.snapshots.refresh();
+    assert.equal(h.snapshots.read(TODAY).result?.sessions.length, 2);
+    assert.equal(JSON.parse(await readFile(join(h.root, "snapshots.json"), "utf8")).version, DISK_VERSION);
+  } finally { release(); h.snapshots.dispose(); await rm(h.root, { recursive: true, force: true }); }
 });

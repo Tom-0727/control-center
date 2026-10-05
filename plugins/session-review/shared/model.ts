@@ -20,6 +20,16 @@ export type Decision = z.infer<typeof decisionSchema>;
 export const spanSchema = z.object({ kind: z.enum(["run", "wait"]), start: z.string(), end: z.string() });
 export type Span = z.infer<typeof spanSchema>;
 
+export const originSchema = z.enum(["human", "scheduled", "other"]);
+export type Origin = z.infer<typeof originSchema>;
+
+/** How automation started the session; null when only a person could have started it. */
+export const launcherSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("schedule"), id: z.string(), name: z.string() }),
+  z.object({ kind: z.literal("agent"), id: z.string() }),
+]).nullable();
+export type Launcher = z.infer<typeof launcherSchema>;
+
 export const sessionCardSchema = z.object({
   id: z.string(),
   sourceId: z.string().optional(),
@@ -40,6 +50,9 @@ export const sessionCardSchema = z.object({
   userMessagesTotal: z.number(),
   agentId: z.string().nullable(),
   projectId: z.string().nullable(),
+  /** human: a person spoke; scheduled: a Paseo schedule ran it and nobody joined; other: nobody spoke and no schedule. */
+  origin: originSchema,
+  launcher: launcherSchema,
   branch: z.string().nullable(),
   cwd: z.string(),
   forkedFrom: z.string().nullable(),
@@ -74,9 +87,18 @@ export const scopeSchema = z.object({
   nodeIds: z.array(z.string()).min(1).optional(),
   workspaces: z.record(z.string(), z.string()).optional(),
   projectId: z.string().nullable().optional(),
+  /** Absent: sessions of every origin. */
+  origin: originSchema.optional(),
   range: rangeSchema,
 });
 export type Scope = z.infer<typeof scopeSchema>;
+
+export const originsSchema = z.object({
+  human: z.number(), scheduled: z.number(), other: z.number(),
+  /** Scheduled sessions per schedule name, largest first. */
+  schedules: z.array(z.object({ name: z.string(), sessions: z.number() })),
+});
+export type Origins = z.infer<typeof originsSchema>;
 
 export const projectSchema = z.object({ id: z.string(), name: z.string(), rootPath: z.string(), nodeId: z.string().optional() });
 export const nodeSchema = z.object({
@@ -99,6 +121,8 @@ export const reviewResultSchema = z.object({
   nodes: z.array(nodeSchema).optional(),
   projects: z.array(projectSchema).optional(),
   complete: z.boolean().optional(),
+  /** Counts of the node and project selection before the origin filter; set when a snapshot is read. */
+  origins: originsSchema.optional(),
   /** Non-fatal condition of this scan, e.g. the node registry could not be read. */
   warning: z.string().optional(),
 });
