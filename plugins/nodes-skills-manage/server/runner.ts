@@ -5,8 +5,9 @@ import { join } from "node:path";
 export type Runner = (action: string, input: Record<string, unknown>, progress: (value: unknown) => void,
   signal: AbortSignal) => Promise<unknown>;
 
-export function createRunner(root: string): Runner {
+export function createRunner(root: string | undefined): Runner {
   return (action, input, progress, signal) => new Promise((resolve, reject) => {
+    if (!root) return reject(new Error("无法确定 control-center 仓库目录；请在 daemon 环境设置 NSM_CONTROL_CENTER"));
     const child = spawn("python3", ["-B", join(root, ".agents/skills/nodes-skills-manage/scripts/controller.py"), action],
       {cwd: root, detached: true, stdio: ["pipe", "pipe", "pipe"]});
     let result: unknown, failure: string | undefined, stderr = "", size = 0;

@@ -1,7 +1,7 @@
 import { defineRpc } from "@getpaseo/plugin";
 import { z } from "zod";
 
-export const actionSchema = z.enum(["refresh", "check-update", "apply-update", "preview-sync", "apply-sync"]);
+export const actionSchema = z.enum(["refresh", "check-update", "apply-update", "sync"]);
 export const startSchema = z.object({
   action: actionSchema,
   nodeIds: z.array(z.string().min(1)).min(1).max(100).optional(),

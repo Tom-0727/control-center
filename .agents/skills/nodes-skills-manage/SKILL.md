@@ -11,18 +11,18 @@ description: 管理 Paseo 节点的全局 skills：盘点、公共技能分发�
 
 脚本路径相对本 skill。节点引擎仅依赖 Python 3.9+，支持 Linux/macOS；控制中心还需要 Git、Paseo CLI、Node 22+ 和仓库 `npm ci` 依赖。
 
-公共来源和多节点操作优先使用 `scripts/controller.py`，Paseo“公共 Skills”页面也调用此入口。JSON 从 stdin 输入，stdout 为 NDJSON，`event=result` 是最终结果；`progress` 为当前进度。预览结果只在本次操作期间保留，用于下一次确认执行。
+公共来源和多节点操作优先使用 `scripts/controller.py`，Paseo“公共 Skills”页面也调用此入口。JSON 从 stdin 输入，stdout 为 NDJSON，`event=result` 是最终结果；`progress` 为当前进度。
 
 ```bash
 python3 scripts/controller.py overview </dev/null
 python3 scripts/controller.py refresh </dev/null
 python3 scripts/controller.py check-update </dev/null
-python3 scripts/controller.py preview-sync </dev/null
+python3 scripts/controller.py sync </dev/null           # 直接分发到节点并校验，会写入节点
 echo '{"source": {"id": "team", "type": "git", "url": "https://github.com/org/repo.git", "path": "skills"}}' \
   | python3 scripts/controller.py add-source          # 登记来源；remove-source 输入 {"id": "..."}
 ```
 
-`overview` 返回每个节点最近一次检查或分发后的记录（`.private/nodes-skills-manage/nodes-status.json`），技能库快照变化后标为 `stale`。`refresh` / `preview-sync` 默认读取全部已登记节点，也可输入 `{"node_ids":["<serverId>"],"workspaces":{"<serverId>":"<workspaceId>"}}`。无明确环境工作区时会返回候选；选定现有工作区再检查。将成功的 `check-update` 或 `preview-sync` 结果作为 `{"preview":<result>}` 输入对应的 `apply-update` 或 `apply-sync`。只应用刚检查并已获授权的预览；预览失效时重新检查。公共撤回、相同内容接管和链接调整均包含在分发预览中。
+`overview` 返回每个节点最近一次检查或分发后的记录（`.private/nodes-skills-manage/nodes-status.json`），技能库快照变化后标为 `stale`。`refresh` / `sync` 默认作用于全部已登记节点，也可输入 `{"node_ids":["<serverId>"],"workspaces":{"<serverId>":"<workspaceId>"}}`。无明确环境工作区时会返回候选；选定现有工作区再执行。`refresh` 只读。`sync` 一步完成分发，没有预览和确认：逐节点盘点，已一致的不传输；其余节点写入后重新盘点校验，包含公共撤回、相同内容接管和链接调整。有冲突的节点整节点跳过并在结果中列出，不覆盖节点内容。将成功的 `check-update` 结果作为 `{"preview":<result>}` 输入 `apply-update`；只应用刚检查并已获授权的结果，失效时重新检查。
 
 ```bash
 # 当前机器（节点目录由该进程的 HOME 决定）

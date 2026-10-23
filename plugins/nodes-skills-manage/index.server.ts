@@ -1,12 +1,11 @@
 import type { PluginServerContext } from "@getpaseo/plugin/server";
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { overviewRpc, startRpc, jobsRpc, detailRpc, addSourceRpc, removeSourceRpc } from "./shared/contracts";
+import { registeredRepoDir } from "./server/repo";
 import { createRunner } from "./server/runner";
 import { Jobs } from "./server/jobs";
 
 export default function contribute(server: PluginServerContext) {
-  const run = createRunner(process.env.NSM_CONTROL_CENTER || join(homedir(), "control-center"));
+  const run = createRunner(process.env.NSM_CONTROL_CENTER || registeredRepoDir());
   const jobs = new Jobs(run);
   const reads = new AbortController();
   server.handle(overviewRpc, async () => overviewRpc.output.parse(await run("overview", {}, () => {}, reads.signal)));

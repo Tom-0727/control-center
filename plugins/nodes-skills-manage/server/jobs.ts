@@ -22,16 +22,14 @@ export class Jobs {
     this.list();
     let request: Record<string, unknown> = {node_ids: input.nodeIds, workspaces: input.workspaces};
     let preview: {job: Job; raw?: unknown} | undefined;
-    if (input.action.startsWith("apply-")) {
+    if (input.action === "apply-update") {
       preview = input.previewId ? this.entries.get(input.previewId) : undefined;
-      const expected = input.action === "apply-update" ? "check-update" : "preview-sync";
-      if (!preview || preview.job.action !== expected || preview.job.status !== "succeeded") throw new Error("预览已失效，请重新预览");
+      if (!preview || preview.job.action !== "check-update" || preview.job.status !== "succeeded") throw new Error("检查结果已失效，请重新检查更新");
       if (preview.job.appliedBy) {
         const prior = this.entries.get(preview.job.appliedBy);
         if (prior) return structuredClone(prior.job);
-        throw new Error("此预览已使用，请重新预览");
+        throw new Error("此检查结果已使用，请重新检查更新");
       }
-      if (input.action === "apply-sync" && !preview.job.result?.nodes?.some(n => n.status === "ready")) throw new Error("没有可分发的节点，请先处理冲突或连接问题");
       request = {preview: preview.raw};
     }
     if ([...this.entries.values()].some(e => e.job.status === "running")) throw new Error("已有任务正在运行，请等待完成");

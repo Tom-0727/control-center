@@ -39,9 +39,9 @@
 
 控制中心通过 `paseo-nodes-use/scripts/exec.sh` 调用公开的 `@getpaseo/client` 终端 API，在同一连接内发送、等待并取回结果；上传使用 SDK 声明的 `internal/daemon-client` 导出，分段机制见 [paseo-nodes-use CLI](../../paseo-nodes-use/references/cli.md#文件上传)。需要 Node 22+ 和仓库根目录的 `npm ci` 依赖；不修改 Paseo 安装文件。
 
-`controller.py` 是 agent 与 Paseo GUI 共用的编排入口，负责来源检查、固定版本更新、多节点盘点和分发。每次盘点、预览和分发把各节点结果写入 `nodes-status.json`，按技能库快照标记；`overview` 据此返回节点状态，快照变化后标为 `stale`。该文件只是观察记录，损坏或删除后由下一次检查重建，不作为写入依据。控制中心写任务使用 `.private/nodes-skills-manage/operation.lock`；节点 apply 在本机锁内校验 `--expected-plan`，预览后内容或归属变化即停止。外部编辑器不遵守这些锁，所以执行后仍重新盘点。
+`controller.py` 是 agent 与 Paseo GUI 共用的编排入口，负责来源检查、固定版本更新、多节点盘点和分发。每次盘点和分发把各节点结果写入 `nodes-status.json`，按技能库快照标记；`overview` 据此返回节点状态，快照变化后标为 `stale`。该文件只是观察记录，损坏或删除后由下一次检查重建，不作为写入依据。控制中心写任务使用 `.private/nodes-skills-manage/operation.lock`；节点 apply 在本机锁内重新计算计划，有冲突时整次不执行。外部编辑器不遵守这些锁，所以执行后仍重新盘点。
 
-插件代码位于仓库 `plugins/nodes-skills-manage/`。后台任务和预览保留在插件进程内存中，页面关闭后任务继续；插件重启后重新检查。上游更新采用 `versions/` 中的新快照，原子更新 `source.json` 指向并保留旧目录。恢复来源时先核对旧目录摘要，再恢复对应的完整来源配置，不能仅更改 revision 标签。
+插件代码位于仓库 `plugins/nodes-skills-manage/`。后台任务和更新检查结果保留在插件进程内存中，页面关闭后任务继续；插件重启后重新检查。上游更新采用 `versions/` 中的新快照，原子更新 `source.json` 指向并保留旧目录。恢复来源时先核对旧目录摘要，再恢复对应的完整来源配置，不能仅更改 revision 标签。
 
 首版支持 Linux/macOS、扁平技能目录和两工具共享集合；不提供 Windows、市场搜索、自动升级、双向合并、按工具启停、插件安装。已有整个母目录软链接或指向第三方目录的链接只盘点，写入前需单独整理。整个 Claude skills 目录已链接到母目录的情况可继续使用。
 

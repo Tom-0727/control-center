@@ -3,16 +3,16 @@ import { Modal, TextInput, useToast } from "@getpaseo/plugin/client/react-native
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { overviewRpc, jobsRpc, startRpc, detailRpc, addSourceRpc, removeSourceRpc, sourceSpecSchema,
-  type Job, type NodeRow, type Source, type SourceSpec, type Start } from "../shared/contracts";
+  type Job, type NodeRow, type Progress, type Source, type SourceSpec, type Start } from "../shared/contracts";
 
 const labels: Record<string, string> = {
   consistent: "一致", missing: "缺失", conflict: "冲突", modified_locally: "本地修改", update_available: "待更新",
   needs_registration: "待接管", link_issue: "链接异常", withdrawn: "待撤回", ready: "已检查", verified: "校验通过",
-  needs_review: "需重新预览", verification_failed: "校验未通过", needs_workspace: "请选择工作区", error: "检查失败",
-  skipped: "已跳过", checking: "检查中", transferring: "传输中", applying: "应用中", verifying: "校验中", finished: "检查结束",
+  verification_failed: "校验未通过", needs_workspace: "请选择工作区", error: "检查失败",
+  checking: "检查中", transferring: "传输中", applying: "写入中", verifying: "校验中", finished: "检查结束",
   stale: "待重新检查",
-  refresh: "刷新节点状态", "check-update": "检查更新", "apply-update": "更新技能库",
-  "preview-sync": "预览分发", "apply-sync": "分发并校验", added: "新增", removed: "移除", modified: "修改",
+  refresh: "扫描", "check-update": "检查更新", "apply-update": "更新技能库",
+  sync: "同步", added: "新增", removed: "移除", modified: "修改",
 };
 const time = (value?: string) => value ? new Date(value).toLocaleString() : "尚未检查";
 const shortRevision = (value: string) => value.startsWith("sha256:") ? value.slice(0, 19) : value.slice(0, 12);
@@ -55,7 +55,8 @@ export function Skills({theme, layout, host}: PluginSurfaceProps) {
   const recent = [...jobs].reverse();
   // Overview carries each node's last recorded check, whether an agent or this page ran it.
   const rows = nodes;
-  const nodeTask = recent.find(j => ["refresh", "preview-sync", "apply-sync"].includes(j.action));
+  const nodeTask = recent.find(j => ["refresh", "sync"].includes(j.action));
+  const nodeRunning = nodeTask?.status === "running" ? nodeTask.action : undefined;
   const updateTask = recent.find(j => ["check-update", "apply-update"].includes(j.action));
   const checkedUpdate = recent.find(j => j.action === "check-update");
   const hasUpdate = !!source && checkedUpdate?.status === "succeeded" && !checkedUpdate.appliedBy && checkedUpdate.result?.revision !== source.revision;
@@ -70,6 +71,8 @@ export function Skills({theme, layout, host}: PluginSurfaceProps) {
   };
   const nodeBadge = (n: NodeRow) => n.stale ? "stale" : n.consistent ? "consistent" : n.status;
   const skillBadge = (n: NodeRow, name?: string) => n.stale ? undefined : n.skills?.find(v => v.name === name)?.status;
+  const progressText = (p: Progress) => `${nodes.find(n => n.id === p.node_id)?.name || "控制中心"} · ${labels[p.result?.status || p.phase] || p.phase}`
+    + (p.total_bytes ? ` ${Math.round((p.bytes || 0) / p.total_bytes * 100)}%` : "");
   const taskStatus = (job: Job) => job.status === "running" ? "进行中" : job.status === "failed" ? "未完成"
     : job.result?.complete === false ? "部分节点未完成" : "已完成";
 
@@ -106,7 +109,7 @@ export function Skills({theme, layout, host}: PluginSurfaceProps) {
   }, [host.id, retry, fetchJobs, overview]);
 
   async function run(action: Start["action"], previewId?: string) {
-    const inCard = ["preview-sync", "apply-sync", "apply-update"].includes(action);
+    const inCard = action === "apply-update";
     if (inCard) setTaskOpen(true);
     setPending(true); setError(""); setTaskError("");
     try {
@@ -140,7 +143,7 @@ export function Skills({theme, layout, host}: PluginSurfaceProps) {
     try {
       const result = await removeSource({id});
       setSource(result.source); setRemoving(undefined); setRetry(n => n + 1);
-      toast.show(`已移除来源 ${id}。检查并确认更新后，它的技能移出技能库；再分发时从节点撤回。`, {variant: "success"});
+      toast.show(`已移除来源 ${id}。检查并确认更新后，它的技能移出技能库；再同步时从节点撤回。`, {variant: "success"});
     } catch (e) { setError(String(e)); }
     finally { setSourceBusy(false); }
   }
@@ -175,7 +178,7 @@ export function Skills({theme, layout, host}: PluginSurfaceProps) {
         onPress={() => setWorkspaces(previous => ({...previous, [node.id]: w.workspaceId}))}>
         {workspaces[node.id] === w.workspaceId ? "✓ " : ""}{w.name || w.directory || w.workspaceId}
       </Button>)}
-      {node.stale && <Text style={{...text, color: c.statusWarning}}>技能库已更新，上次检查结果不再适用，请刷新此节点。</Text>}
+      {node.stale && <Text style={{...text, color: c.statusWarning}}>技能库已更新，上次检查结果不再适用，请重新扫描此节点。</Text>}
       {!node.stale && node.skills?.filter(s => s.status !== "consistent").map(s => <Text key={s.name} style={text}>{s.name} · {labels[s.status] || s.status}</Text>)}
       <Text style={muted}>节点专属 / 未纳管技能：{node.node_skills?.length ? [...new Set(node.node_skills.map(s => s.name))].join("、") : node.checked_at && node.skills ? "无" : "待检查"}</Text>
     </View>;
@@ -207,7 +210,7 @@ export function Skills({theme, layout, host}: PluginSurfaceProps) {
       {updateTask && updateTask.status !== "running" && <Text style={muted}>
         {updateTask.status === "failed" ? "更新检查或执行未完成，请查看结果"
           : hasUpdate ? `发现更新 · ${checkedUpdate?.result?.changes?.length || 0} 个技能有变更`
-          : updateTask.action === "apply-update" ? "技能库已更新，可以分发到节点" : "已是最新"}
+          : updateTask.action === "apply-update" ? "技能库已更新，可以同步到节点" : "已是最新"}
       </Text>}
     </View>
 
@@ -235,7 +238,7 @@ export function Skills({theme, layout, host}: PluginSurfaceProps) {
           {spec.type === "git" && <Text selectable style={{...muted, fontSize: 12}}>分支：{spec.ref || "默认"} · 目录：{spec.path || "仓库根目录"}</Text>}
         </View>}
         {removing === spec.id && <Text style={{...text, color: c.statusWarning}}>
-          移除后，确认下一次更新时这些技能移出技能库，之后分发会从节点撤回：{spec.installed.join("、") || "无"}
+          移除后，确认下一次更新时这些技能移出技能库，之后同步会从节点撤回：{spec.installed.join("、") || "无"}
         </Text>}
       </View>)}
     </View>
@@ -243,15 +246,19 @@ export function Skills({theme, layout, host}: PluginSurfaceProps) {
     <View style={card}>
       <View style={{flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12}}>
         <Text accessibilityRole="header" style={heading}>节点与技能</Text>
-        <Button disabled={busy || !selected.length} onPress={() => void run("refresh")}>刷新所选节点</Button>
+        <View style={{flexDirection: "row", flexWrap: "wrap", gap: 10}}>
+          <Button disabled={busy || !selected.length} onPress={() => void run("refresh")}>{nodeRunning === "refresh" ? "扫描中…" : "扫描"}</Button>
+          <Button primary disabled={busy || !source || !selected.length} onPress={() => void run("sync")}>{nodeRunning === "sync" ? "同步中…" : "同步"}</Button>
+        </View>
       </View>
       <Text style={muted}>已选择 {selected.length} / {nodes.length} 个节点 · 已检查 {checkedCount} / {nodes.length}</Text>
+      <Text style={muted}>扫描只查看所选节点的一致状态；同步把技能库直接分发到所选节点并校验，有冲突的节点跳过。</Text>
       {nodeTask && <View style={{backgroundColor: c.surface0, borderRadius: 8, padding: 12, gap: 8}}>
         <View style={{flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8}}>
           <Text style={text}>{labels[nodeTask.action]} · {taskStatus(nodeTask)}</Text>
-          <Button onPress={() => openTask(nodeTask)}>{nodeTask.status === "running" ? "查看任务进度" : nodeTask.action === "preview-sync" && !nodeTask.appliedBy ? "查看分发预览" : "查看任务结果"}</Button>
+          <Button onPress={() => openTask(nodeTask)}>{nodeTask.status === "running" ? "查看任务进度" : "查看任务结果"}</Button>
         </View>
-        {nodeTask.status === "running" && nodeTask.progress.map((p, i) => <Text key={p.node_id || i} style={muted}>{nodes.find(n => n.id === p.node_id)?.name || "控制中心"} · {labels[p.result?.status || p.phase] || p.phase}</Text>)}
+        {nodeTask.status === "running" && nodeTask.progress.map((p, i) => <Text key={p.node_id || i} style={muted}>{progressText(p)}</Text>)}
       </View>}
       <View style={{flexDirection: "row", flexWrap: "wrap", gap: 8}}>{rows.map(n => <Pressable key={n.id}
         accessibilityRole="checkbox" accessibilityLabel={n.name} accessibilityState={{checked: selected.includes(n.id), disabled: busy}}
@@ -280,7 +287,6 @@ export function Skills({theme, layout, host}: PluginSurfaceProps) {
       </View></ScrollView>}
       {!layout.compact && rows.filter(n => expandedNode === n.id || n.error || n.skills?.some(s => s.status === "withdrawn")).map(n => <View key={n.id} style={{gap: 8}}><Text style={heading}>{n.name}</Text><NodeDetails node={n}/></View>)}
       {!layout.compact && <Text style={muted}>点击节点名称查看检查时间、异常和节点专属技能。</Text>}
-      <Button primary disabled={busy || !source || !selected.length} onPress={() => void run("preview-sync")}>预览分发到 {selected.length} 个节点</Button>
     </View>
   </ScrollView>
 
@@ -330,10 +336,7 @@ export function Skills({theme, layout, host}: PluginSurfaceProps) {
         <Text style={muted}>{time(current.createdAt)}{current.result?.source ? ` · 技能库版本 ${current.result.source.revision.slice(0, 12)}` : ""}</Text>
         {current.error && <Text selectable style={{...text, color: c.statusDanger}}>{current.error}</Text>}
         {current.status === "running" && <Text style={muted}>关闭卡片后任务继续，可在原操作区域重新查看。</Text>}
-        {current.status === "running" && current.progress.map((p, i) => <Text key={p.node_id || i} style={text}>
-          {nodes.find(n => n.id === p.node_id)?.name || "控制中心"} · {labels[p.result?.status || p.phase] || p.phase}
-          {p.total_bytes ? ` · ${Math.round((p.bytes || 0) / p.total_bytes * 100)}% 传输` : ""}
-        </Text>)}
+        {current.status === "running" && current.progress.map((p, i) => <Text key={p.node_id || i} style={text}>{progressText(p)}</Text>)}
         {current.result?.changes && <>
           <Text style={text}>候选版本：{current.result.revision?.slice(0, 12)} · {current.result.changes.length} 个技能有变化</Text>
           {current.result.changes.map(change => <View key={change.name} style={{gap: 8}}>
@@ -343,33 +346,29 @@ export function Skills({theme, layout, host}: PluginSurfaceProps) {
             </View>)}
           </View>)}
           {current.action === "check-update" && current.result.revision !== source?.revision && !current.appliedBy && <>
-            <Text style={muted}>更新技能库后，再选择节点分发。</Text>
+            <Text style={muted}>更新技能库后，再选择节点同步。</Text>
             <Button primary disabled={busy} onPress={() => void run("apply-update", current.id)}>确认更新技能库</Button>
           </>}
         </>}
         {current.result?.nodes?.map(n => <View key={n.id} style={{gap: 7, borderTopWidth: 1, borderColor: c.border, paddingTop: 12}}>
           <Text style={{...text, fontWeight: "600"}}>{n.name} · {labels[n.status || ""] || n.status}</Text>
           {n.error && <Text selectable style={{...text, color: c.statusDanger}}>{n.error}</Text>}
-          {n.plan && <>
-            {n.no_op && <Text style={muted}>内容和链接已一致；执行时仍会复核。</Text>}
-            {n.plan.adoptions.length > 0 && <Text style={text}>接管相同内容：{n.plan.adoptions.join("、")}</Text>}
+          {n.no_op && <Text style={muted}>内容和链接已一致，未做变更。</Text>}
+          {/* A conflicting node is left untouched, so its planned actions never ran. */}
+          {n.plan && n.status !== "conflict" && <>
+            {n.plan.adoptions.length > 0 && <Text style={text}>已接管相同内容：{n.plan.adoptions.join("、")}</Text>}
             {n.plan.actions.map((a, i) => <Text selectable key={i} style={{...text, color: a.op === "remove" ? c.statusDanger : c.foreground}}>
-              {a.op === "copy" ? "写入技能" : a.op === "link" ? "调整链接" : "移除"} · {a.path}{a.target ? ` → ${a.target}` : ""}
+              {a.op === "copy" ? "已写入技能" : a.op === "link" ? "已调整链接" : "已移除"} · {a.path}{a.target ? ` → ${a.target}` : ""}
             </Text>)}
-            {n.plan.conflicts.map((v, i) => <Text selectable key={i} style={{...text, color: c.statusDanger}}>冲突：{v.name || v.path} · {v.reason}</Text>)}
-            {!n.no_op && !n.plan.actions.length && n.plan.state_changed && <Text style={text}>更新公共技能管理记录。</Text>}
+            {!n.plan.actions.length && n.plan.state_changed && <Text style={text}>已更新公共技能管理记录。</Text>}
           </>}
+          {n.plan?.conflicts.map((v, i) => <Text selectable key={i} style={{...text, color: c.statusDanger}}>冲突：{v.name || v.path} · {v.reason}</Text>)}
         </View>)}
-        {current.action === "preview-sync" && current.status === "succeeded" && <>
-          <Text style={muted}>确认后执行上述可用节点的变更；有冲突或检查失败的节点会跳过。</Text>
-          <Button primary disabled={busy || !!current.appliedBy || !current.result?.nodes?.some(n => n.status === "ready")}
-            onPress={() => void run("apply-sync", current.id)}>{current.appliedBy ? "此预览已提交" : `确认分发到 ${current.result?.nodes?.filter(n => n.status === "ready").length || 0} 个节点`}</Button>
-        </>}
-        {current.action === "apply-update" && current.status === "succeeded" && <Text style={text}>技能库已更新。关闭卡片，选择节点后即可预览分发。</Text>}
-        {retryIds.length > 0 && !busy && <Button onPress={() => {setSelected(retryIds); setTaskOpen(false);}}>选择未完成节点，返回重新预览</Button>}
+        {current.action === "apply-update" && current.status === "succeeded" && <Text style={text}>技能库已更新。关闭卡片，选择节点后点击「同步」即可分发。</Text>}
+        {retryIds.length > 0 && !busy && <Button onPress={() => {setSelected(retryIds); setTaskOpen(false);}}>只选中未完成的节点</Button>}
         {current.status === "failed" && (["check-update", "apply-update"].includes(current.action)
           ? <Button disabled={busy} onPress={() => { setTaskOpen(false); void run("check-update"); }}>重新检查更新</Button>
-          : <Button disabled={busy || !selected.length} onPress={() => void run("refresh")}>刷新实际节点状态</Button>)}
+          : <Button disabled={busy || !selected.length} onPress={() => void run("refresh")}>重新扫描节点</Button>)}
       </>}
     </Modal.Content>
   </Modal>

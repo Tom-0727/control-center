@@ -133,8 +133,6 @@ class NodeStatus:
             fcntl.flock(handle, fcntl.LOCK_EX)
             saved = self.load()
             for row in rows:
-                if row.get('status') == 'skipped' or not row.get('checked_at'):
-                    continue
                 saved[row['id']] = {**{k: row[k] for k in STATUS_FIELDS if k in row}, 'snapshot': snapshot}
             skills.write_json(self.file, saved)
 
@@ -215,69 +213,52 @@ class Controller:
                 self.progress(node_id=target['id'], phase='finished', result=completed[target['id']])
         return [completed[t['id']] for t in targets]
 
-    def inspect(self, request, preview=False):
-        config, source = self.sources.current()
-        targets = self.targets(request.get('node_ids'))
-        choices = request.get('workspaces', {})
-        def inspect_node(target):
-            self.progress(node_id=target['id'], phase='checking')
-            workspace, available = self.workspace(target, choices)
-            row = {**target, 'workspace': workspace, 'workspaces': available, 'checked_at': now()}
-            if not workspace:
-                return {**row, 'status': 'needs_workspace', 'error': '请为此节点选择一个现有工作区'}
-            inventory = self.run(target, workspace, ['inventory'])
-            comparison = compare(config, inventory)
-            row.update(status='ready', inventory=inventory, **comparison)
-            if preview:
-                if comparison['consistent']:
-                    row.update(no_op=True, inventory_digest=fingerprint(inventory),
-                               plan={'actions': [], 'conflicts': [], 'adoptions': [], 'state_changed': False})
-                else:
-                    row['plan'] = self.run(target, workspace, ['sync', '--source', str(source), '--adopt', '--prune'])
-                    if row['plan']['conflicts']:
-                        row['status'] = 'conflict'
-            return row
-        rows = self.parallel(targets, inspect_node)
-        if fingerprint(self.sources.current()[0]) != fingerprint(config):
-            raise ValueError('盘点期间来源已变化，请重新刷新')
-        self.status.record(rows, snapshot_key(config))
-        return {'source': self.sources.summary(), 'source_fingerprint': fingerprint(config),
-                'nodes': rows, 'checked_at': now()}
+    def check(self, config, target, choices):
+        self.progress(node_id=target['id'], phase='checking')
+        workspace, available = self.workspace(target, choices)
+        row = {**target, 'workspace': workspace, 'workspaces': available, 'checked_at': now()}
+        if not workspace:
+            return {**row, 'status': 'needs_workspace', 'error': '请为此节点选择一个现有工作区'}
+        inventory = self.run(target, workspace, ['inventory'])
+        return {**row, 'status': 'ready', 'inventory': inventory, **compare(config, inventory)}
 
-    def apply_sync(self, preview):
+    def inspect(self, request):
+        config, _ = self.sources.current()
+        choices = request.get('workspaces', {})
+        rows = self.parallel(self.targets(request.get('node_ids')), lambda target: self.check(config, target, choices))
+        if fingerprint(self.sources.current()[0]) != fingerprint(config):
+            raise ValueError('盘点期间来源已变化，请重新扫描')
+        self.status.record(rows, snapshot_key(config))
+        return {'source': self.sources.summary(), 'nodes': rows, 'checked_at': now()}
+
+    def sync(self, request):
         with self.writing():
             config, source = self.sources.current()
-            if fingerprint(config) != preview['source_fingerprint']:
-                raise ValueError('控制中心快照已变化，请重新预览分发')
-            selected = [n for n in preview['nodes'] if n['status'] == 'ready' and not n['plan']['conflicts']]
-            targets = self.targets([n['id'] for n in selected])
-            by_id = {n['id']: n for n in selected}
+            targets = self.targets(request.get('node_ids'))
+            choices = request.get('workspaces', {})
             with tempfile.TemporaryDirectory(prefix='nodes-skills-frozen-') as tmp:
+                # Every node receives the same content even if the snapshot directory is touched meanwhile.
                 frozen = Path(tmp) / 'source'
                 shutil.copytree(source, frozen, symlinks=True)
                 if scan(frozen) != {n: {'digest': row['digest']} for n, row in config['snapshot']['skills'].items()}:
-                    raise ValueError('快照内容已变化，请重新预览')
-                def apply_node(target):
-                    prior = by_id[target['id']]
-                    workspace, _ = self.workspace(target, {target['id']: prior['workspace']})
-                    self.progress(node_id=target['id'], phase='checking')
-                    if prior.get('no_op'):
-                        current = self.run(target, workspace, ['inventory'])
-                        if fingerprint(current) != prior['inventory_digest']:
-                            return {**target, 'status': 'needs_review', 'error': '节点内容已变化，请重新预览'}
-                    else:
-                        applied = self.run(target, workspace, ['sync', '--source', str(frozen), '--adopt', '--prune',
-                                                             '--expected-plan', prior['plan']['plan_digest'], '--apply'])
-                        if applied['conflicts']:
-                            return {**target, 'status': 'conflict', 'plan': applied, 'error': '节点内容或归属变化，请重新预览'}
+                    raise ValueError('技能库内容与登记不一致，请先检查更新')
+                def sync_node(target):
+                    row = self.check(config, target, choices)
+                    if row['status'] != 'ready':
+                        return row
+                    if row['consistent']:
+                        return {**row, 'status': 'verified', 'no_op': True}
+                    # The node recomputes the plan under its own lock; any conflict leaves it untouched.
+                    applied = self.run(target, row['workspace'], ['sync', '--source', str(frozen), '--adopt', '--prune', '--apply'])
+                    if applied['conflicts']:
+                        return {**row, 'status': 'conflict', 'plan': applied, 'error': '节点上有本地修改或同名内容，已跳过此节点'}
                     self.progress(node_id=target['id'], phase='verifying')
-                    actual = self.run(target, workspace, ['inventory'])
+                    actual = self.run(target, row['workspace'], ['inventory'])
                     comparison = compare(config, actual)
-                    return {**target, 'status': 'verified' if comparison['consistent'] else 'verification_failed',
-                            'workspace': workspace, 'inventory': actual, 'checked_at': now(), **comparison}
-                rows = self.parallel(targets, apply_node)
+                    return {**row, 'status': 'verified' if comparison['consistent'] else 'verification_failed',
+                            'plan': applied, 'inventory': actual, 'checked_at': now(), **comparison}
+                rows = self.parallel(targets, sync_node)
             self.status.record(rows, snapshot_key(config))
-            rows.extend({**n, 'status': 'skipped'} for n in preview['nodes'] if n['id'] not in by_id)
             return {'source': self.sources.summary(), 'nodes': rows,
                     'complete': all(n['status'] == 'verified' for n in rows), 'checked_at': now()}
 
@@ -300,18 +281,15 @@ class Controller:
         if action == 'remove-source':
             with self.writing():
                 return self.sources.remove(request.get('id'))
-        if action == 'preview-sync':
-            return self.inspect(request, preview=True)
-        if action == 'apply-sync':
-            return self.apply_sync(request['preview'])
+        if action == 'sync':
+            return self.sync(request)
         raise ValueError('未知操作')
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=['overview', 'skill-detail', 'refresh', 'check-update',
-                                         'apply-update', 'add-source', 'remove-source',
-                                         'preview-sync', 'apply-sync'])
+                                         'apply-update', 'add-source', 'remove-source', 'sync'])
     parser.add_argument('--data-dir', type=Path, help='Use isolated controller data for tests')
     args = parser.parse_args()
     try:

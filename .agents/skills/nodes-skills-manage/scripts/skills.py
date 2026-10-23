@@ -260,13 +260,6 @@ class Manager:
                 'state_changed': before != after,
                 'adoptions': sorted(n for n in incoming if n not in before['managed']
                                     and n in after['managed'] and exists(self.root / n))}
-        # Upload directories differ between preview and apply. Bind actual content,
-        # ownership and destinations, never an ephemeral source path.
-        normalized = [{k: v for k, v in action.items() if k != 'source'} for action in actions]
-        check = {'command': args.command, 'before': before, 'after': after,
-                 'inventory': self.inventory(), 'actions': normalized, 'conflicts': conflicts,
-                 'incoming': {n: digest(p) for n, p in incoming.items()}}
-        plan['plan_digest'] = hashlib.sha256(json.dumps(check, sort_keys=True).encode()).hexdigest()
         return plan, before, after
 
     def apply(self, args):
@@ -277,8 +270,6 @@ class Manager:
         with (self.state_dir / 'lock').open('a') as lock:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             plan, before, after = self.plan(args)
-            if args.expected_plan and args.expected_plan != plan['plan_digest']:
-                plan['conflicts'].append({'reason': 'preview changed; review a new plan before applying'})
             if plan['conflicts'] or (not plan['actions'] and not plan['state_changed']):
                 return dict(plan, applied=False)
             backup = self.state_dir / 'backups' / uuid.uuid4().hex
@@ -330,7 +321,6 @@ def parser():
     for name in ['sync', 'import', 'link', 'remove']:
         cmd = sub.add_parser(name)
         cmd.add_argument('--apply', action='store_true', help='Write changes; otherwise only preview')
-        cmd.add_argument('--expected-plan', help='Require the content/ownership digest from a reviewed preview')
         if name in {'sync', 'import'}:
             cmd.add_argument('--source', required=True)
         if name == 'sync':

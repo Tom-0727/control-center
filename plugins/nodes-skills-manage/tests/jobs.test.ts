@@ -24,12 +24,15 @@ test("confirmations use the server receipt and duplicate clicks return one job",
   assert.equal(jobs.start({action: "apply-update", previewId: check.id}).id, applied.id);
 });
 
-test("missing, mismatched and conflicted previews cannot be applied", async () => {
-  const jobs = new Jobs(async () => ({nodes: [{id: "a", name: "A", status: "conflict"}]}));
-  assert.throws(() => jobs.start({action: "apply-sync", previewId: "unknown"}), /预览已失效/);
-  const preview = jobs.start({action: "preview-sync"}); await tick();
-  assert.throws(() => jobs.start({action: "apply-update", previewId: preview.id}), /预览已失效/);
-  assert.throws(() => jobs.start({action: "apply-sync", previewId: preview.id}), /没有可分发/);
+test("update needs a finished check; sync starts directly on the chosen nodes", async () => {
+  const calls: Array<{action: string; input: Record<string, unknown>}> = [];
+  const jobs = new Jobs(async (action, input) => { calls.push({action, input}); return {nodes: [{id: "a", name: "A", status: "conflict"}]}; });
+  assert.throws(() => jobs.start({action: "apply-update", previewId: "unknown"}), /检查结果已失效/);
+  const scan = jobs.start({action: "refresh"}); await tick();
+  assert.throws(() => jobs.start({action: "apply-update", previewId: scan.id}), /检查结果已失效/);
+  const sync = jobs.start({action: "sync", nodeIds: ["a"], workspaces: {a: "w"}}); await tick();
+  assert.deepEqual(calls.at(-1), {action: "sync", input: {node_ids: ["a"], workspaces: {a: "w"}}});
+  assert.equal(jobs.list().find(j => j.id === sync.id)!.result!.nodes![0].status, "conflict");
 });
 
 test("background job exposes bounded per-node progress and survives readers leaving", async () => {
