@@ -38,6 +38,8 @@ test("gateway: a registry adds the other nodes through node.sh with the configur
     // The repository directory is wrong: the error names the script instead of failing silently.
     const misplaced = new PaseoGateway(() => ({ ...config, controlCenterDir: join(root, "elsewhere") }), local);
     await assert.rejects(misplaced.nodes(), /node\.sh/);
+    const unknown = new PaseoGateway(() => ({ ...config, controlCenterDir: undefined }), local);
+    await assert.rejects(unknown.nodes(), /请在设置中填写/);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

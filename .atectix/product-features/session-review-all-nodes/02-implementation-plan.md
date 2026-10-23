@@ -61,7 +61,7 @@
 动机：插件只能装在中控。MacBook 这类节点没有 `/home/ubuntu/paseo-deployment` 清单，装上后每轮采集都报「找不到节点清单」。用户确认的模型是：一个装在 daemon 上的插件，永远采本机；有配对的其他节点就顺带采，没有就只采本机，被采节点不装任何服务。
 
 - `Fleet` 持有本机节点身份（`paseo status --json` 的 serverId 与 hostname，CLI 不可用时读 daemon home 的 `server-id` 文件），本机始终走进程内解析。`gateway.nodes()` 只在清单文件可读时调用 `node.sh list`，并与本机去重，保留清单里的名称；清单不可读返回本机；`node.sh list` 失败由 `Fleet` 降级为只采本机并把原因写进 `ReviewResult.warning` 和目录的 `warnings`。
-- 新增插件设置 `nodesDir`、`controlCenterDir`、`timezone`（`shared/settings.ts`，Paseo `registerSettings`，客户端新增设置页）。解析顺序为设置、环境变量、默认值：清单目录默认 `node.sh` 自己的 `/home/ubuntu/paseo-deployment`，仓库目录默认 `~/control-center`，时区默认 daemon 本机时区。显式配置的清单不存在时目录状态为 `missing` 并提示；未配置为 `none`。设置变化通过 `subscribe` 生效：改时区调用 `Snapshots.reset()` 清空快照重采，改目录只刷新。
+- 新增插件设置 `nodesDir`、`controlCenterDir`、`timezone`（`shared/settings.ts`，Paseo `registerSettings`，客户端新增设置页）。解析顺序为设置、环境变量、默认值：清单目录默认 `node.sh` 自己的 `/home/ubuntu/paseo-deployment`，仓库目录默认 Paseo 加载本插件的仓库（Paseo 从内存执行插件 bundle，插件只能从 `$PASEO_HOME/config.json` 登记的插件路径上推两级得到仓库），时区默认 daemon 本机时区。显式配置的清单不存在时目录状态为 `missing` 并提示；未配置为 `none`。设置变化通过 `subscribe` 生效：改时区调用 `Snapshots.reset()` 清空快照重采，改目录只刷新。
 - `shared/time.ts` 以 IANA 时区参数化：`dateKey`、`dayStartMs`、`nextDayStartMs`、`calendarBounds` 用 `Intl` 计算当地午夜，覆盖夏令时。客户端 `fmtTime`、`fmtDate`、甘特图刻度和午夜线都使用目录返回的时区；快照按时区校验，另一时区的磁盘快照不恢复。
 - 抽取缓存文件名带版本号（`*.v5.json`），`Store.init()` 保留其他版本和无版本文件，以免破坏仍在运行的旧版读取；仅在本版本文件不存在时原子建立迁移文件，避免旧缓存覆盖已有的新抽取。
 - 页面只有一个节点时隐藏节点选择、行内节点标签和详情里的节点名，本机节点标注「（本机）」；目录里的清单状态和警告显示在页面顶部。清单变化导致旧的节点选择失效时自动回到全部节点。

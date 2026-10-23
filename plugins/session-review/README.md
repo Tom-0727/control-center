@@ -26,7 +26,7 @@ Paseo 设置页「复盘」里的三项都可以留空：
 | 设置 | 留空时 | 填写后 |
 |---|---|---|
 | 节点清单目录 | 使用环境变量或默认清单；找不到清单时只复盘本机 | 读取其中的 `relay-allowed-hosts.json` 和 `.private/` 配对链接，同时复盘清单里的节点。中控上这就是 `paseo-nodes-use` 使用的部署目录 |
-| control-center 仓库目录 | `~/control-center` | 本机仓库检出位置，采集其他节点时使用其中的 `paseo-nodes-use` 脚本和 `dist/collector.cjs` |
+| control-center 仓库目录 | Paseo 加载本插件的仓库（`~/.paseo/config.json` 中插件路径的上两级） | 本机仓库检出位置，采集其他节点时使用其中的 `paseo-nodes-use` 脚本和 `dist/collector.cjs` |
 | 时区 | daemon 本机时区 | 日期范围和时间轴使用的 IANA 时区；跨节点复盘时各节点建议填同一个值 |
 
 对应的环境变量 `PASEO_DEPLOY_DIR`、`SR_CONTROL_CENTER`、`SR_TIMEZONE` 在没有设置值时生效，`scripts/scan.ts` 只认环境变量。中控沿用 `node.sh` 的默认目录 `/home/ubuntu/paseo-deployment`，无需改设置；清单指向的目录不存在时页面会说明，并继续复盘本机。改时区会清空快照重新采集，改目录只触发一次刷新。

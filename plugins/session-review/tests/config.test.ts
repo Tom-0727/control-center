@@ -1,16 +1,23 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { homedir } from "node:os";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_NODES_DIR, registryPath, resolveConfig } from "../server/config.ts";
 import { localTimezone } from "../shared/time.ts";
 
-test("config: nothing configured reviews this machine in its own timezone with node.sh's default registry location", () => {
-  const c = resolveConfig(undefined, {});
-  assert.equal(c.nodesDir, DEFAULT_NODES_DIR); assert.equal(c.nodesDirExplicit, false);
-  assert.equal(c.controlCenterDir, join(homedir(), "control-center"));
-  assert.equal(c.timezone, localTimezone()); assert.deepEqual(c.warnings, []);
-  assert.equal(registryPath(c), join(DEFAULT_NODES_DIR, "relay-allowed-hosts.json"));
+test("config: nothing configured reviews this machine in its own timezone, with node.sh's default registry and the repository Paseo loaded this plugin from", async () => {
+  const paseoHome = await mkdtemp(join(tmpdir(), "review-config-"));
+  try {
+    await writeFile(join(paseoHome, "config.json"), JSON.stringify({ plugins: { "session-review": { source: "directory", path: "/srv/center/control-center/plugins/session-review" } } }));
+    const c = resolveConfig(undefined, { PASEO_HOME: paseoHome });
+    assert.equal(c.nodesDir, DEFAULT_NODES_DIR); assert.equal(c.nodesDirExplicit, false);
+    assert.equal(c.controlCenterDir, "/srv/center/control-center");
+    assert.equal(c.timezone, localTimezone()); assert.deepEqual(c.warnings, []);
+    assert.equal(registryPath(c), join(DEFAULT_NODES_DIR, "relay-allowed-hosts.json"));
+    // Not registered with this Paseo home: the repository stays unknown instead of guessing a path.
+    assert.equal(resolveConfig(undefined, { PASEO_HOME: join(paseoHome, "missing") }).controlCenterDir, undefined);
+  } finally { await rm(paseoHome, { recursive: true, force: true }); }
 });
 
 test("config: settings win over environment, blanks fall through, invalid timezones fall back with a warning", () => {

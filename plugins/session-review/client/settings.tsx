@@ -37,8 +37,8 @@ export function ReviewSettingsScreen({ theme, layout }: PluginSurfaceProps) {
         <SettingsInput key={`nodes-${settings.revision}`} label="节点清单目录" placeholder="/home/ubuntu/paseo-deployment"
           hint="含 relay-allowed-hosts.json 与 .private/ 配对链接的目录。留空使用环境变量或默认清单；找不到清单时只复盘本机。"
           initialValue={draft.nodesDir} onChangeText={v => set({ nodesDir: v })} />
-        <SettingsInput key={`repo-${settings.revision}`} label="control-center 仓库目录" placeholder="~/control-center"
-          hint="本机的仓库检出位置，读取其他节点时使用其中的 paseo-nodes-use 脚本和采集程序。只复盘本机时无需填写。"
+        <SettingsInput key={`repo-${settings.revision}`} label="control-center 仓库目录" placeholder="留空使用本插件所在仓库"
+          hint="本机的仓库检出位置，读取其他节点时使用其中的 paseo-nodes-use 脚本和采集程序。留空时使用 Paseo 加载本插件的仓库，一般无需填写。"
           initialValue={draft.controlCenterDir} onChangeText={v => set({ controlCenterDir: v })} />
       </SettingsSection>
       <SettingsSection title="显示">
