@@ -44,6 +44,12 @@ if [[ -n "$link_file" ]]; then
   ' "$link") || die "无法解析 $name 的配对链接"
   [[ "$actual" == "$expected" ]] || die "$name serverId 不一致：清单 $expected，配对链接 $actual"
   host_args=(--host "$link")
+  # 节点直连密码：.private/<name 或别名>.password；0.10 起 relay 连接也校验密码
+  if [[ -z "${PASEO_PASSWORD:-}" ]]; then
+    while IFS= read -r key; do
+      [[ -r "$PRIVATE/$key.password" ]] && { PASEO_PASSWORD=$(<"$PRIVATE/$key.password"); export PASEO_PASSWORD; break; }
+    done < <(jq -r '.[0] | ([.name] + .aliases)[]' <<<"$node_json")
+  fi
 else
   # 无配对链接则视为本机 daemon
   local_status=$(paseo status --json 2>/dev/null)

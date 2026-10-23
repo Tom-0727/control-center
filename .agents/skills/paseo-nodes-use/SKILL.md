@@ -22,7 +22,7 @@ scripts/node.sh <节点> sdk-upload -- <本地文件>          # 上传文件到
 |---|---|
 | 1. 解析节点 | `node.sh list` |
 | 2. 检查节点 | `node.sh <节点> ls -g --json`（连通性）；`node.sh <节点> provider ls --json`（可用 provider） |
-| 3. 下发任务 | `node.sh <节点> run --workspace <id> --provider <claude\|codex>[/模型] -d --title <标题> --json "<任务>"` |
+| 3. 下发任务 | `node.sh <节点> run --workspace <id> --provider <claude\|codex>[/模型] --no-wait --title <标题> --json "<任务>"` |
 | 4. 观察任务 | `ls -g --json`、`inspect <id> --json`、`logs <id> --tail <n>`、`wait <id> --timeout <秒>` |
 | 5. 干预任务 | `send <id> "<消息>"`、`stop <id>`、`permit ls`、`permit allow\|deny <id> [req_id]` |
 | 6. 执行 shell | `exec.sh <节点> --workspace <id> [--timeout 秒] -- <命令>`，返回命令输出和退出码 |
@@ -48,5 +48,6 @@ scripts/node.sh <节点> sdk-upload -- <本地文件>          # 上传文件到
 - **核对 serverId**：`[node]` 行的 serverId 与预期不符或脚本报错时停止，不要绕过脚本直接调用 `paseo --host`。
 - **目录属于节点**：路径都指目标节点上的路径，注意区分本机与节点上的同名目录。
 - **凭据不回显**：不要读取或打印 `.private/` 下的文件内容。
+- **节点密码**：`.private/<name 或别名>.password`（入口服务器为 `local.password`），脚本自动读取；`exec.sh` 的 SDK 连接会发送并校验，CLI（0.10.3–0.12.0）经配对链接暂不发送（靠上游兼容放行）。
 - **区分超时和离线**：连通性用 `ls -g --json` 探测（等待 15 秒）；不要用 `status` / `daemon status`，它只等 1.5 秒，会误报离线。
 - 统一加 `--json`，以便解析结果。

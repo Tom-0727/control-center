@@ -1,5 +1,5 @@
 {
   "id": "nodes-skills-manage",
   "description": "管理控制中心公共技能，检查版本差异并分发到 Paseo 节点。",
-  "requirements": { "paseo": "^0.9.2" }
+  "requirements": { "paseo": ">=0.9.2" }
 }

@@ -1,4 +1,4 @@
-# paseo CLI 速查（0.9.2）
+# paseo CLI 速查（0.12.0）
 
 以下子命令均通过 `scripts/node.sh <节点>` 调用。
 
@@ -6,7 +6,7 @@
 
 `run [options] <prompt>`
 
-- `-d, --background` 后台运行
+- `--no-wait` 后台运行，立即返回（旧写法 `-d` / `--background` 已弃用）
 - `--title <title>`、`--label <k=v>` 标题、标签
 - `--provider <p>` / `--model <m>` / `--thinking <id>` / `--mode <mode>`
 - `--workspace <id>` 必填，在该 workspace 目录下运行（`node.sh` 禁止 `--new-workspace` / `--worktree*`）

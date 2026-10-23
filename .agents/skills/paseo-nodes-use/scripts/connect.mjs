@@ -3,7 +3,7 @@
 export function connectionConfig() {
   const expected = process.env.PASEO_NODE_EXPECTED_ID;
   if (!expected) throw new Error('Use paseo-nodes-use/scripts/node.sh');
-  const config = { connectTimeoutMs: 15000, reconnect: { enabled: false }, appVersion: '0.9.2' };
+  const config = { connectTimeoutMs: 15000, reconnect: { enabled: false }, appVersion: '0.12.0' };
   if (process.env.PASEO_NODE_OFFER) {
     const hash = new URL(process.env.PASEO_NODE_OFFER).hash.slice(1).replace(/^offer=/, '');
     const offer = JSON.parse(Buffer.from(decodeURIComponent(hash), 'base64url').toString());
@@ -15,6 +15,7 @@ export function connectionConfig() {
     url.searchParams.set('v', '2');
     config.url = url.toString();
     config.e2ee = { enabled: true, daemonPublicKeyB64: offer.daemonPublicKeyB64 };
+    if (process.env.PASEO_PASSWORD) config.password = process.env.PASEO_PASSWORD;
   } else {
     const endpoint = process.env.PASEO_NODE_ENDPOINT;
     if (!endpoint || endpoint.startsWith('/')) throw new Error('SDK access requires a TCP daemon endpoint');
