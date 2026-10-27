@@ -89,7 +89,7 @@ export class PaseoGateway {
 
   private scripts(config: ResolvedConfig) {
     if (!config.controlCenterDir) throw new Error("无法确定本机的 control-center 仓库目录，请在设置中填写");
-    const dir = join(config.controlCenterDir, ".agents/skills/paseo-nodes-use/scripts");
+    const dir = join(config.controlCenterDir, "skills/paseo-nodes-use/scripts");
     return { nodeSh: join(dir, "node.sh"), execSh: join(dir, "exec.sh"), pluginDir: join(config.controlCenterDir, "plugins/session-review") };
   }
   private run(file: string, args: string[], signal?: AbortSignal, timeout?: number): Promise<string> {

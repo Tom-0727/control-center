@@ -1,6 +1,6 @@
 # control-center
 
-供 Claude Code 与 Codex 使用的 skills，仅在本仓库内生效：在仓库目录中启动 agent 即自动加载。节点全局 skills 由 `nodes-skills-manage` 从登记的上游来源拉取并分发。
+供 Claude Code 与 Codex 使用的节点控制 skills，实体在本仓库 `skills/`，入口服务器通过软链接全局加载，在任意目录启动 agent 都可用。节点全局 skills 由 `nodes-skills-manage` 从登记的上游来源拉取并分发。
 
 用途是给 coding agent 赋能：
 
@@ -13,15 +13,16 @@
 ## 目录设计
 
 ```
-.agents/skills/<skill名>/SKILL.md     # 唯一源，Codex 读取
-.claude/skills -> ../.agents/skills   # 软链接，Claude 读取
+skills/<skill名>/SKILL.md             # 唯一源
 AGENTS.md                             # 仓库约定
 CLAUDE.md                             # 指向 AGENTS.md
 plugins/nodes-skills-manage/          # Paseo 原生插件，独立于 Paseo 源码
 ```
 
-- 两个工具的项目级 skills 目录不同：Codex 读 `.agents/skills`，Claude 读 `.claude/skills`。用软链接共享同一份源，避免维护两份。
-- 只在 `.agents/skills/` 里增删改；`.claude/skills` 只是链接。
+- 仓库不设项目级 skills 目录。入口服务器为每个技能建两条软链接，Codex 读前者，Claude 读后者：
+  - `~/.agents/skills/<skill名> -> <仓库>/skills/<skill名>`
+  - `~/.claude/skills/<skill名> -> ../../.agents/skills/<skill名>`
+- 只在 `skills/` 里增删改；新增技能后补上述两条链接。这些技能用于控制其他节点，只装在入口服务器，不进公共分发集合。
 - `SKILL.md` 的 frontmatter 只写两边通用的 `name` 和 `description`，目录名与 `name` 一致。
 - 公开仓库，不存放节点地址、serverId、配对链接、token 等敏感信息，运行时从本机读取。
 

@@ -39,7 +39,7 @@ python3 scripts/node.py <节点> --workspace <id> -- sync --source <控制中心
 ## 工作方式
 
 1. **盘点**：`inventory` 列出公共母目录、Claude 和旧 Codex 目录，含内容摘要、归属和链接状态。未登记的技能按节点现有内容保留，不能自行归为公共。
-2. **确定源与范围**：先读取控制中心 `.private/nodes-skills-manage/source.json`，复用已登记的来源列表（Git 仓库或 well-known 发现索引），无需每次询问来源；新增来源用 `controller.py add-source` 登记，不为单个提供方写代码。`snapshot.directory` 相对此配置文件所在目录解析；将其传给 `sync --source`。公共目录是扁平的 `<name>/SKILL.md` 完整实体快照，不要把整个项目 `.agents/skills` 当作公共集合。配置不存在时再对齐来源；来源更新与版本核对见 [公共来源](references/common-source.md)。
+2. **确定源与范围**：先读取控制中心 `.private/nodes-skills-manage/source.json`，复用已登记的来源列表（Git 仓库或 well-known 发现索引），无需每次询问来源；新增来源用 `controller.py add-source` 登记，不为单个提供方写代码。`snapshot.directory` 相对此配置文件所在目录解析；将其传给 `sync --source`。公共目录是扁平的 `<name>/SKILL.md` 完整实体快照，不要把控制中心的 `skills/` 当作公共集合。配置不存在时再对齐来源；来源更新与版本核对见 [公共来源](references/common-source.md)。
 3. **预览并执行**：写操作默认只预览，加 `--apply` 才生效。在用户已授权的范围内直接执行，不重复询问许可。新发现的公共名单、归属转换或内容冲突需要先对齐；不要自行选覆盖版本。
 4. **验证**：执行后重新盘点，核对公共摘要和链接。需要完整集合一致时使用 `sync --prune`；不带该参数会列出 `retained_common`，它表示保留了源中已消失的旧公共技能。
 

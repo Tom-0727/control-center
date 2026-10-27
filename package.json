@@ -6,7 +6,7 @@
   "scripts": {
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test:plugin": "npm run test --workspace=nodes-skills-manage",
-    "test:paseo-nodes": "node --test '.agents/skills/paseo-nodes-use/tests/*.test.mjs'"
+    "test:paseo-nodes": "node --test 'skills/paseo-nodes-use/tests/*.test.mjs'"
   },
   "dependencies": { "@getpaseo/client": "0.12.0" }
 }

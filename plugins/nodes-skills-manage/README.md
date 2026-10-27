@@ -15,7 +15,7 @@ npm run typecheck
 在 Paseo 的控制中心主机设置中开启 Plugins，再通过现有包装器安装：
 
 ```bash
-.agents/skills/paseo-nodes-use/scripts/node.sh <控制中心节点> plugin install "$PWD/plugins/nodes-skills-manage" --json
+skills/paseo-nodes-use/scripts/node.sh <控制中心节点> plugin install "$PWD/plugins/nodes-skills-manage" --json
 ```
 
 服务端默认从 Paseo 加载本插件的仓库（`$PASEO_HOME/config.json` 中插件路径的上两级）调用管理脚本；要改用其他检出时，在 daemon 环境设置 `NSM_CONTROL_CENTER`。节点地址、工作区和来源均从现有运行配置读取。
@@ -33,12 +33,12 @@ npm run typecheck
 
 任务在控制中心后台运行，离开页面后继续。内存保留最近 20 个完成任务，最长一小时；插件重启后重新盘点。超时或断连可能发生在节点已开始写入之后，先重新扫描实际状态，再决定是否重新同步。
 
-与 agent 共用 `.agents/skills/nodes-skills-manage/scripts/controller.py`。只管理公共集合，节点专属技能由原管理入口处理。检查更新覆盖 `source.json` 中登记的全部来源（Git 仓库和 well-known 发现索引）。
+与 agent 共用 `skills/nodes-skills-manage/scripts/controller.py`。只管理公共集合，节点专属技能由原管理入口处理。检查更新覆盖 `source.json` 中登记的全部来源（Git 仓库和 well-known 发现索引）。
 
 ## 验证
 
 ```bash
 npm run typecheck
 npm run test:plugin
-python3 -B -m unittest discover -s .agents/skills/nodes-skills-manage/tests -q
+python3 -B -m unittest discover -s skills/nodes-skills-manage/tests -q
 ```

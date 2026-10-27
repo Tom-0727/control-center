@@ -17,7 +17,7 @@ npm run build:collector --workspace=session-review   # 可选：采集其他节�
 paseo plugin install "$PWD/plugins/session-review" --json
 ```
 
-装到远端节点时把最后一行换成 `.agents/skills/paseo-nodes-use/scripts/node.sh <节点> plugin install ...`。更新代码后执行 `paseo plugin reload session-review --json`（远端同样经 `node.sh`），重载不会重启 agent。拉取新代码后也只需重载：采集其他节点用的 `dist/collector.cjs` 不入库，比源码旧时会在下一次采集前自动重建。
+装到远端节点时把最后一行换成 `skills/paseo-nodes-use/scripts/node.sh <节点> plugin install ...`。更新代码后执行 `paseo plugin reload session-review --json`（远端同样经 `node.sh`），重载不会重启 agent。拉取新代码后也只需重载：采集其他节点用的 `dist/collector.cjs` 不入库，比源码旧时会在下一次采集前自动重建。
 
 ## 设置
 

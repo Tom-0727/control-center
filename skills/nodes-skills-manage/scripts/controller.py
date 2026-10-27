@@ -19,7 +19,7 @@ import skills
 import node
 from sources import Sources, fingerprint, now, scan
 
-ROOT = Path(__file__).resolve().parents[4]
+ROOT = Path(__file__).resolve().parents[3]
 OUTPUT_LOCK = threading.Lock()
 
 
@@ -30,7 +30,7 @@ def emit(event, **fields):
 
 class Gateway:
     def __init__(self, root):
-        self.paseo = Path(root) / '.agents/skills/paseo-nodes-use'
+        self.paseo = Path(root) / 'skills/paseo-nodes-use'
 
     def command(self, *args):
         run = subprocess.run([str(self.paseo / 'scripts/node.sh'), *args],

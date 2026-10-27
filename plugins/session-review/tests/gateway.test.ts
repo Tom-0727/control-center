@@ -28,7 +28,7 @@ test("gateway: a registry adds the other nodes through node.sh with the configur
     const nodesDir = join(root, "deploy"); await mkdir(nodesDir, { recursive: true });
     await writeFile(join(nodesDir, "relay-allowed-hosts.json"), "[]");
     await writeFile(join(nodesDir, "rows.tsv"), "control\tsrv_local\t中控\nvm\tsrv_vm\tVM-SG\n\n");
-    const scripts = join(root, "repo", ".agents/skills/paseo-nodes-use/scripts"); await mkdir(scripts, { recursive: true });
+    const scripts = join(root, "repo", "skills/paseo-nodes-use/scripts"); await mkdir(scripts, { recursive: true });
     await writeFile(join(scripts, "node.sh"), '#!/bin/sh\n[ "$1" = list ] || exit 2\ncat "$PASEO_DEPLOY_DIR/rows.tsv"\n');
     await chmod(join(scripts, "node.sh"), 0o700);
     const config = resolveConfig({ nodesDir, controlCenterDir: join(root, "repo") }, {});
