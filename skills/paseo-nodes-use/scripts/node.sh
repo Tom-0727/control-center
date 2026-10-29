@@ -51,14 +51,15 @@ if [[ -n "$link_file" ]]; then
     done < <(jq -r '.[0] | ([.name] + .aliases)[]' <<<"$node_json")
   fi
 else
-  # 无配对链接则视为本机 daemon
-  local_status=$(paseo status --json 2>/dev/null)
-  actual=$(jq -r '.serverId // empty' <<<"$local_status")
-  [[ "$actual" == "$expected" ]] || die "$name 没有配对链接，且本机 serverId（${actual:-未知}）与清单 $expected 不一致"
+  # 无配对链接则视为本机 daemon。经配置的监听地址核对，不依赖看到 daemon 进程，PID 隔离的沙箱中也能用
+  endpoint=$(paseo status --json 2>/dev/null | jq -r '.configuredListen // empty' || true)
+  [[ -n "$endpoint" ]] || die "$name 没有配对链接，且读不到本机 daemon 的监听地址"
   if [[ -z "${PASEO_PASSWORD:-}" && -r "$PRIVATE/local.password" ]]; then
     PASEO_PASSWORD=$(<"$PRIVATE/local.password"); export PASEO_PASSWORD
   fi
-  host_args=()
+  actual=$(paseo status --host "$endpoint" --json 2>/dev/null | jq -r '.serverId // empty' || true)
+  [[ "$actual" == "$expected" ]] || die "$name 没有配对链接，且本机 serverId（${actual:-未知}）与清单 $expected 不一致"
+  host_args=(--host "$endpoint")
 fi
 
 # workspace 规范：执行必须指定已有 workspace，禁止新建 project/workspace
@@ -86,8 +87,7 @@ if [[ "$1" == sdk-exec || "$1" == sdk-upload ]]; then
   if [[ -n "$link_file" ]]; then
     export PASEO_NODE_OFFER="$link"
   else
-    export PASEO_NODE_ENDPOINT
-    PASEO_NODE_ENDPOINT=$(jq -r '.listen // empty' <<<"$local_status")
+    export PASEO_NODE_ENDPOINT="$endpoint"
   fi
   node "$(dirname "$0")/$helper" "$@" 2> >(redact >&2) | redact
   exit "${PIPESTATUS[0]}"
