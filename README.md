@@ -8,6 +8,7 @@
 - **节点全局 skills 管理**：`nodes-skills-manage` 统一盘点和分发公共 skills，保留节点专属技能，支持目录迁移、链接检查和变更预览。
 - **Paseo 公共 Skills 界面**：[独立插件](plugins/nodes-skills-manage/README.md) 提供节点状态、仓库更新差异、快照更新和确认分发，与 agent 共用管理入口。
 - **Paseo 会话复盘**：[复盘插件](plugins/session-review/README.md) 装在任意节点上复盘本机的 Claude / Codex 会话；配置了节点清单的机器同时汇总清单里的节点，查看时间线、决策点与消息详情。
+- **Paseo 语音模式**：[MiniMax 语音合成转接](services/minimax-tts-shim/README.md) 让每个节点的语音模式用 MiniMax 朗读回复。
 - **研发上下文连通**：打通飞书、Linear、GitHub 等上下文，读写文档、issue 与消息，并关联到研发任务。
 
 ## 目录设计
@@ -16,7 +17,8 @@
 skills/<skill名>/SKILL.md             # 唯一源
 AGENTS.md                             # 仓库约定
 CLAUDE.md                             # 指向 AGENTS.md
-plugins/nodes-skills-manage/          # Paseo 原生插件，独立于 Paseo 源码
+plugins/<插件名>/                      # Paseo 原生插件，独立于 Paseo 源码
+services/<服务名>/                     # 配合 Paseo 在节点上常驻的本机服务
 ```
 
 - 仓库不设项目级 skills 目录。入口服务器为每个技能建两条软链接，Codex 读前者，Claude 读后者：
