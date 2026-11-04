@@ -25,6 +25,8 @@ Linux 装为 systemd 用户服务，macOS 装为 LaunchAgent，开机或登录�
 
 识别地址末尾的 `?_=` 让 Paseo 追加的 `/audio/transcriptions` 落进查询参数，请求实际发到 MiniMax 的识别接口。可用音色可通过 MiniMax 的 `POST /v1/get_voice`（`{"voice_type":"system"}`）查询。
 
+Agent 用 Paseo 的 `speak` 工具朗读回复，0.15 默认不给 Agent 注入 Paseo 工具，需在 `config.json` 设 `"daemon": {"mcp": {"injectIntoAgents": true}}` 并 `paseo reload`，否则语音模式只识别、Agent 只用文字回复。注入后该节点所有 Agent 都带有 Paseo 的 MCP 工具。
+
 判停（`turnDetection`）只能选本地。识别和合成都不用本地模型时，Paseo 0.15 不会启动本地语音进程，语音模式会报 `turn_detection_unavailable`；需在 `~/.paseo/config.json` 写上 `"providers": {"local": {"modelsDir": "<PASEO_HOME>/models/local-speech"}}` 并重启 daemon。判停模型随 Paseo 自带，不会下载其他模型。
 
 测试：在仓库根目录执行 `npm run test:minimax-tts-shim`。
