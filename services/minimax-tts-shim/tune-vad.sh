@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # 调高 Paseo 语音模式的开口判定门槛，减少误触发。Paseo 0.15 未开放这两个参数，
 # 只能改安装目录里的常量；升级 Paseo 后会被覆盖，需重新执行，每台开语音模式的节点各执行一次。
-# 用法：./tune-vad.sh [分数线 0-1，默认 0.8] [持续毫秒，默认 800]
+# 用法：./tune-vad.sh [分数线 0-1，默认 0.95] [持续毫秒，默认 1000]
 set -euo pipefail
 
-THRESHOLD="${1:-0.8}"
-CONFIRM_MS="${2:-800}"
+THRESHOLD="${1:-0.95}"
+CONFIRM_MS="${2:-1000}"
 
 ROOT="$(npm root -g)/@getpaseo/cli/node_modules/@getpaseo/server"
 FILE="$ROOT/dist/server/server/speech/providers/local/sherpa/silero-vad-session.js"
