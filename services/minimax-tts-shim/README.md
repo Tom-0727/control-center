@@ -29,4 +29,8 @@ Agent 用 Paseo 的 `speak` 工具朗读回复，0.15 默认不给 Agent 注入 
 
 判停（`turnDetection`）只能选本地。识别和合成都不用本地模型时，Paseo 0.15 不会启动本地语音进程，语音模式会报 `turn_detection_unavailable`；需在 `~/.paseo/config.json` 写上 `"providers": {"local": {"modelsDir": "<PASEO_HOME>/models/local-speech"}}` 并重启 daemon。判停模型随 Paseo 自带，不会下载其他模型。
 
+误触发：语音模式持续收音，由本地模型判断是否开口。Paseo 0.15 写死的人声分数线 0.5 偏低，键盘声、旁人说话、外放的朗读都会被当成开口。本目录的 `./tune-vad.sh [分数线] [持续毫秒]` 直接改安装目录里的常量（默认分数线 0.8，持续 800 毫秒即 Paseo 原值），执行后 `paseo restart` 生效。Paseo 升级会覆盖，需重新执行；分数线过高会漏掉小声说话，持续毫秒过高会漏掉短句。外放时仍可能被自己的朗读触发，建议戴耳机。
+
+朗读两遍：dsh 通过 ACP 挂载 Paseo 工具时固定 60 秒超时，而 `speak` 要播完才返回，长回复会报 `Request timed out`，agent 以为没读出来又读一遍。在用 dsh 的节点执行 `./tune-dsh-mcp-timeout.sh [毫秒]`（默认 600000），对之后新建的 dsh agent 生效；升级 dsh 后需重新执行。
+
 测试：在仓库根目录执行 `npm run test:minimax-tts-shim`。
