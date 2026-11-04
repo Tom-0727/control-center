@@ -205,6 +205,19 @@ class ControllerTests(unittest.TestCase):
         self.assertNotIn('skills', node)
         self.assertIn('checked_at', node)
 
+    def test_stale_status_omits_fields_the_last_run_never_saw(self):
+        # A node that failed or lacked a workspace has no node_skills; the GUI schema rejects null.
+        self.gateway.fail.add('second')
+        self.controller.inspect({})
+        self.skill(self.repo / 'skills', 'review', 'second')
+        self.commit()
+        self.source.apply(self.source.check())
+        nodes = {n['id']: n for n in self.controller.execute('overview', {})['nodes']}
+        self.assertTrue(nodes['second']['stale'])
+        self.assertNotIn('node_skills', nodes['second'])
+        self.assertNotIn('workspaces', nodes['second'])
+        self.assertIsInstance(nodes['first']['node_skills'], list)
+
     def test_skipped_and_failed_nodes_keep_useful_status(self):
         self.controller.inspect({})
         self.gateway.fail.add('second')

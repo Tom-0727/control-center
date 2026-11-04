@@ -147,8 +147,8 @@ class NodeStatus:
                 rows.append({**target, **{k: v for k, v in last.items() if k != 'snapshot'}})
             else:
                 # Checked against an earlier snapshot: per-skill verdicts no longer apply.
-                rows.append({**target, 'stale': True, 'checked_at': last.get('checked_at'),
-                             'node_skills': last.get('node_skills'), 'workspaces': last.get('workspaces')})
+                kept = {k: last[k] for k in ('checked_at', 'node_skills', 'workspaces') if last.get(k) is not None}
+                rows.append({**target, 'stale': True, **kept})
         return rows
 
 
