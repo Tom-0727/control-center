@@ -1,4 +1,4 @@
-# paseo CLI 速查（0.12.0）
+# paseo CLI 速查（0.15.0）
 
 以下子命令均通过 `scripts/node.sh <节点>` 调用。
 

@@ -9,5 +9,5 @@
     "test:paseo-nodes": "node --test 'skills/paseo-nodes-use/tests/*.test.mjs'",
     "test:minimax-tts-shim": "node --test 'services/minimax-tts-shim/tests/*.test.mjs'"
   },
-  "dependencies": { "@getpaseo/client": "0.12.0" }
+  "dependencies": { "@getpaseo/client": "0.15.0" }
 }

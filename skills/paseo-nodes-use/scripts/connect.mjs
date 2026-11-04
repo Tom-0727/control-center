@@ -3,7 +3,7 @@
 export function connectionConfig() {
   const expected = process.env.PASEO_NODE_EXPECTED_ID;
   if (!expected) throw new Error('Use paseo-nodes-use/scripts/node.sh');
-  const config = { connectTimeoutMs: 15000, reconnect: { enabled: false }, appVersion: '0.12.0' };
+  const config = { connectTimeoutMs: 15000, reconnect: { enabled: false }, appVersion: '0.15.0' };
   if (process.env.PASEO_NODE_OFFER) {
     const hash = new URL(process.env.PASEO_NODE_OFFER).hash.slice(1).replace(/^offer=/, '');
     const offer = JSON.parse(Buffer.from(decodeURIComponent(hash), 'base64url').toString());
